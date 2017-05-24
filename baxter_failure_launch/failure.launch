@@ -1,0 +1,13 @@
+<launch>
+    <!-- load the setting file -->
+   <rosparam command="load" file="$(find baxter_failure)/config.yaml" ns="baxter_failure"/>
+   <arg name="camera" value="camera"/>
+   <arg name="camera_link_pose" default="0.25 0.08 0.28 0.0 0.57 0.0"/>
+   <!-- Users update this to set transform between camera and robot -->
+   <node pkg="tf" type="static_transform_publisher" name="camera_link_broadcaster"
+         args="$(arg camera_link_pose) /base /$(arg camera)_link 100" />
+
+   <node pkg="baxter_failure" type="detectobject.py" name="pickinup_controller_action_lib" args="-c $(arg camera)"/>
+   <node pkg="rviz" type="rviz" name="reachingObjectsRviz"/>
+
+</launch>
