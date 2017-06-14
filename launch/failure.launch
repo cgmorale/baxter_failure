@@ -1,7 +1,7 @@
 <launch>
 	<!-- load the setting file -->
 	<arg name="camera" value="camera"/>
-	<arg name="camera_link_pose" default="0.25 0.08 0.83 0.0 0.95 0.0"/>
+	<arg name="camera_link_pose" default="0.25 -0.04 0.79 0.0 0.95 0.0"/>
 	<include file = "$(find openni_launch)/launch/openni.launch"/>
 	<include file = "$(find apriltags_ros)/launch/example.launch"/>
 	<node pkg="tf" type="static_transform_publisher" name="camera_link_broadcaster"

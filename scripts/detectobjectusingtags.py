@@ -7,6 +7,7 @@ import rospy
 import baxter_interface
 from lab_ros_perception.AprilTagModule import AprilTagModule
 from apriltags_ros.msg import AprilTagDetectionArray
+from sensor_msgs.msg import Range
 import time
 import tf
 import math
@@ -44,7 +45,7 @@ class TagsPose(object):
         self.newPose= t.transformPose('base',ids)
         # change the orientation (quaternions) of april tags so that the IK can work
         # need to change it so Baxter knows were to grab the tags from
-        self.newPose.pose.position.z -= 0.02
+        self.newPose.pose.position.z += 0.20
         self.newPose.pose.orientation.x = 0
         self.newPose.pose.orientation.y = 1.0
         self.newPose.pose.orientation.z = 0
@@ -68,13 +69,7 @@ class TagsPose(object):
         resp_seeds = struct.unpack('<%dB' % len(resp.result_type),
                                    resp.result_type)
         if (resp_seeds[0] != resp.RESULT_INVALID):
-            seed_str = {
-                        ikreq.SEED_USER: 'User Provided Seed',
-                        ikreq.SEED_CURRENT: 'Current Joint Angles',
-                        ikreq.SEED_NS_MAP: 'Nullspace Setpoints',
-                       }.get(resp_seeds[0], 'None')
 #            print("SUCCESS - Valid Joint Solution Found from Seed Type: %s" %
-#                  (seed_str,))
             # Format solution into Limb API-compatible dictionary
 #            limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position))
 #            print "\nIK Joint Solution:\n", limb_joints
@@ -117,8 +112,14 @@ class MoveBaxter(object):
     def openGripper(self): 
         #opens the gripper
         self.gripper.command_position(position=100.0, block =True,timeout=5.0)
-        self.gripperOpen = True 
+        self.gripper.open() 
         return
+    
+    def closeGripper(self):
+        #closes the gripper
+        self.gripper.command_position(position=100.0, block =True,timeout=5.0)
+        self.gripper.close()
+        
 
     def defineJointAngles(self, positionList):
         self.angles['right_s0']= positionList[0]
@@ -127,21 +128,65 @@ class MoveBaxter(object):
         self.angles['right_e1']= positionList[3]
         self.angles['right_w0']= positionList[4]
         self.angles['right_w1']= positionList[5]
-        self.angles['right_w2']= positionList[6] 
+        self.angles['right_w2']= positionList[6]
+        return self.angles
 
+    def bringArmDown(self, tallpose):
+        tallpose.pose.position.z -= 0.20
+        tallpose.pose.position.x +=0.02
+        return tallpose
+    
+    def anglesForTrashcan(self, angles):
+        angles['right_s0']= 0.516
+        angles['right_s1']= -0.661
+        angles['right_e0']= -0.816
+        angles['right_e1']= 1.583
+        angles['right_w0']= 1.311
+        angles['right_w1']= 0.548
+        angles['right_w2']= -0.942
+        return angles 
+        
+        
     def moveArm(self):
-#        self.newPosesDict, self.joints = TagsPose.makeDictofTransformedPoses()
-#        for key, val in self.joints.items():
-        pass
+        self.calibrateGripper()
+        self.openGripper()
+        self.newPosesDict, self.joints = TagsPose.makeDictofTransformedPoses(TagsPose())
+        for key, val in self.joints.items():
+            angles = self.defineJointAngles(val)
+            self.limb.move_to_joint_positions(angles)
+            break
+        for key, val in self.newPosesDict.items():
+            print val
+            down = self.bringArmDown(val)
+            validTransformed = TagsPose.checkValidPose(TagsPose(),down)
+            downangles = self.defineJointAngles(validTransformed)
+            self.limb.move_to_joint_positions(downangles)
+            break
+        self.closeGripper()
+        trashcan = self.anglesForTrashcan(downangles)
+        self.limb.move_to_joint_positions(trashcan)
+        self.openGripper()
+            
 
+class BaxterRangeSensor():
+    def __init__(self):
+        self.distance = {}
+        root_name = "/robot/range/"
+        sensor_name = "right_hand_range/state"
+        self._left_sensor = rospy.Subscriber(root_name + sensor_name, Range, callback = self._sensorCallback, callback_args = "right", queue_size = 1)
+        
+    def _sensorCallback(self,msg):
+        self.distance["right"] = msg.range
 
 
 def main(args):
     rospy.init_node("TagsPose", anonymous=True)
-    ic = TagsPose()
+#    ic = TagsPose()
+    ic = MoveBaxter()
 #    x = ic.getDictofPoses()
 #    x = ic.transform_pose()
-    x = ic.makeDictofTransformedPoses()
+#    x = ic.makeDictofTransformedPoses()
+    x = ic.moveArm()
     print x
     try:
         rospy.spin()
