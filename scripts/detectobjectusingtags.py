@@ -49,7 +49,9 @@ class TagsPose(object):
         self.newPose= t.transformPose('base',ids)
         # change the orientation (quaternions) of april tags so that the IK can work
         # need to change it so Baxter knows were to grab the tags from
-        self.newPose.pose.position.z += 0.20
+        self.newPose.pose.position.x -=0
+        self.newPose.pose.position.y +=0.03
+        self.newPose.pose.position.z += 0.215
         self.newPose.pose.orientation.x = 0
         self.newPose.pose.orientation.y = 1.0
         self.newPose.pose.orientation.z = 0
@@ -193,35 +195,39 @@ class SceneObstacles():
         
     def addTable(self):
         # attachBox (self, "name", sizex, sizey,sizez, x, y, z, wait = True)
-        self.psi.attachBox(self, 'table', 0.75, 0.152, 0.73, 0.75, -0.74, -0.93, wait=True)
+        self.psi.attachBox("table", 0.75, 1.52, 0.73, 0.84, 0.2, -0.55, 'base', 'pedestal', wait=True)
         
     def addTrashAsObstacles(self):
         self.trashposes,self.baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
-        self.trashloc= self.trashposes.poses
-        for i in xrange(len(self.trashloc)):
-            self.trash_loc_x.append(self.trashloc[i].position.x)
-            self.trash_loc_y.append(self.trashloc[i].position.y)
-            self.orien_trash.append(self.trashloc[i].position.z*pi/180)
-            self.size.append(self.trashloc[i].position.x)
+        for key, val in self.trashposes.items():
+            val = self.trashposes[key]
+            self.trashloc = val.pose
+            self.trash_loc_x.append(self.trashloc.position.x)
+            self.trash_loc_y.append(self.trashloc.position.y)
+            self.trash_loc_z.append(self.trashloc.position.z)
+            self.orien_trash.append(self.trashloc.position.z*pi/180)
+            self.size.append(self.trashloc.position.x)
         while self.trash_loc_x:
             self.psi.clear()
-            self.psi.attachBox(self, 'table', 0.75, 0.152, 0.73, 0.75, -0.74, -0.93,'base', touch_links=['pedestal'])
-            self.objectlist =['box1','box2', 'box3']
-            for i in xrange(len(self.trash_loc_x)):
-                self.psi.addCube(self, self.objectlist[i], 0.045,self.trash_loc_x[i], self.trash_loc_y[i],self.trash_loc_z[i])
+            self.psi.attachBox('table', 0.75, 1.52, 0.73, 0.84, 0.2, -0.55,'base', 'pedestal', wait=True)
+            self.objectlist =['box0','box1', 'box2','box3']
+            for i in xrange(len(self.trash_loc_x)-1):
+                self.psi.addCube(self.objectlist[i], 0.045,self.trash_loc_x[i], self.trash_loc_y[i],self.trash_loc_z[i], wait = True)
         self.psi.waitForSync()
 
     def addTrashcan(self):
+        self.psi.attachBox("table", 0.75, 1.52, 0.73, 0.84, 0.2, -0.55, 'base', 'pedestal', wait=True)
+        self.psi.attachBox("trashcan",0.365, 0.265,0.39,1.03,-0.415, 0.01,'base','pedestal',wait= True)
         self.tc = PoseStamped()
         self.tc.header.frame_id = "camera_rgb_optical_frame"
         self.tc.header.stamp = rospy.Time.now()
-        self.tc.pose.position.x = 0.65
-        self.tc.pose.position.y = 0.55
+        self.tc.pose.position.x = 1.03
+        self.tc.pose.position.y = -0.415
         self.tc.pose.position.z = 0.1
-        self.tc.orientation.x = 0
-        self.tc.orientation.y = 1
-        self.tc.orientation.z = 0
-        self.tc.orientation.w =0
+        self.tc.pose.orientation.x = 0
+        self.tc.pose.orientation.y = 1
+        self.tc.pose.orientation.z = 0
+        self.tc.pose.orientation.w =0
         
         
         
@@ -232,11 +238,13 @@ class SceneObstacles():
 def main(args):
     rospy.init_node("TagsPose", anonymous=True)
 #    ic = TagsPose()
-    ic = MoveBaxter()
+#    ic = MoveBaxter()
+    ic = SceneObstacles()
 #    x = ic.getDictofPoses()
 #    x = ic.transform_pose()
 #    x = ic.makeDictofTransformedPoses()
-    x = ic.moveArm()
+#    x = ic.moveArm()
+    x = ic.addTrashAsObstacles()
     print x
     try:
         rospy.spin()
