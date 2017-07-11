@@ -50,8 +50,8 @@ class TagsPose(object):
         # change the orientation (quaternions) of april tags so that the IK can work
         # need to change it so Baxter knows were to grab the tags from
         self.newPose.pose.position.x -=0
-        self.newPose.pose.position.y +=0.03
-        self.newPose.pose.position.z += 0.215
+        self.newPose.pose.position.y +=0
+        self.newPose.pose.position.z += 0
         self.newPose.pose.orientation.x = 0
         self.newPose.pose.orientation.y = 1.0
         self.newPose.pose.orientation.z = 0
@@ -97,7 +97,6 @@ class TagsPose(object):
             if validTransformed != 0:
                 self.jointAngles[key] = validTransformed
                 self.transformedDict[key] = transformed
-                print self.transformedDict
         return self.transformedDict , self.jointAngles 
     
         
@@ -210,9 +209,10 @@ class SceneObstacles():
         while self.trash_loc_x:
             self.psi.clear()
             self.psi.attachBox('table', 0.75, 1.52, 0.73, 0.84, 0.2, -0.55,'base', 'pedestal', wait=True)
+            self.psi.attachBox("trashcan",0.365, 0.265,0.39,1.03,-0.415, 0.01,'base','pedestal',wait= True)
             self.objectlist =['box0','box1', 'box2','box3']
-            for i in xrange(len(self.trash_loc_x)-1):
-                self.psi.addCube(self.objectlist[i], 0.045,self.trash_loc_x[i], self.trash_loc_y[i],self.trash_loc_z[i], wait = True)
+            for i in xrange(len(self.trash_loc_x)):
+                self.psi.addCube(self.objectlist[i], 0.06 ,self.trash_loc_x[i], self.trash_loc_y[i],self.trash_loc_z[i], wait = True)
         self.psi.waitForSync()
 
     def addTrashcan(self):
