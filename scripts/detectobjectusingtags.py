@@ -8,13 +8,17 @@ import baxter_interface
 from lab_ros_perception.AprilTagModule import AprilTagModule
 from apriltags_ros.msg import AprilTagDetectionArray
 from sensor_msgs.msg import Range
+from geometry_msgs.msg import PoseStamped, PoseArray
 import time
 import tf
-import math
+from moveit_python import PlanningSceneInterface
+from math import pi 
 from baxter_core_msgs.srv import (
     SolvePositionIK,
     SolvePositionIKRequest,
 )
+
+
 
 
 class TagsPose(object):
@@ -78,7 +82,6 @@ class TagsPose(object):
             return resp.joints[0].position 
         else:
 #            print("INVALID POSE - No Valid Joint Solution Found.")
-
             return 0
 
 
@@ -92,6 +95,7 @@ class TagsPose(object):
             if validTransformed != 0:
                 self.jointAngles[key] = validTransformed
                 self.transformedDict[key] = transformed
+                print self.transformedDict
         return self.transformedDict , self.jointAngles 
     
         
@@ -154,18 +158,17 @@ class MoveBaxter(object):
         for key, val in self.joints.items():
             angles = self.defineJointAngles(val)
             self.limb.move_to_joint_positions(angles)
-            break
+#            break
         for key, val in self.newPosesDict.items():
-            print val
             down = self.bringArmDown(val)
             validTransformed = TagsPose.checkValidPose(TagsPose(),down)
             downangles = self.defineJointAngles(validTransformed)
             self.limb.move_to_joint_positions(downangles)
-            break
-        self.closeGripper()
-        trashcan = self.anglesForTrashcan(downangles)
-        self.limb.move_to_joint_positions(trashcan)
-        self.openGripper()
+#            break
+            self.closeGripper()
+            trashcan = self.anglesForTrashcan(downangles)
+            self.limb.move_to_joint_positions(trashcan)
+            self.openGripper()
             
 
 class BaxterRangeSensor():
@@ -177,6 +180,53 @@ class BaxterRangeSensor():
         
     def _sensorCallback(self,msg):
         self.distance["right"] = msg.range
+        
+class SceneObstacles():
+    def __init__(self):
+        self.psi = PlanningSceneInterface("base")
+        self.psi.clear()
+        self.trash_loc_x = []
+        self.trash_loc_y = []
+        self.trash_loc_z = []
+        self.size = []
+        self.orien_trash = []
+        
+    def addTable(self):
+        # attachBox (self, "name", sizex, sizey,sizez, x, y, z, wait = True)
+        self.psi.attachBox(self, 'table', 0.75, 0.152, 0.73, 0.75, -0.74, -0.93, wait=True)
+        
+    def addTrashAsObstacles(self):
+        self.trashposes,self.baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
+        self.trashloc= self.trashposes.poses
+        for i in xrange(len(self.trashloc)):
+            self.trash_loc_x.append(self.trashloc[i].position.x)
+            self.trash_loc_y.append(self.trashloc[i].position.y)
+            self.orien_trash.append(self.trashloc[i].position.z*pi/180)
+            self.size.append(self.trashloc[i].position.x)
+        while self.trash_loc_x:
+            self.psi.clear()
+            self.psi.attachBox(self, 'table', 0.75, 0.152, 0.73, 0.75, -0.74, -0.93,'base', touch_links=['pedestal'])
+            self.objectlist =['box1','box2', 'box3']
+            for i in xrange(len(self.trash_loc_x)):
+                self.psi.addCube(self, self.objectlist[i], 0.045,self.trash_loc_x[i], self.trash_loc_y[i],self.trash_loc_z[i])
+        self.psi.waitForSync()
+
+    def addTrashcan(self):
+        self.tc = PoseStamped()
+        self.tc.header.frame_id = "camera_rgb_optical_frame"
+        self.tc.header.stamp = rospy.Time.now()
+        self.tc.pose.position.x = 0.65
+        self.tc.pose.position.y = 0.55
+        self.tc.pose.position.z = 0.1
+        self.tc.orientation.x = 0
+        self.tc.orientation.y = 1
+        self.tc.orientation.z = 0
+        self.tc.orientation.w =0
+        
+        
+        
+        
+    
 
 
 def main(args):
