@@ -11,12 +11,14 @@ from sensor_msgs.msg import Range
 from geometry_msgs.msg import PoseStamped, PoseArray
 import time
 import tf
-from moveit_python import PlanningSceneInterface
+from moveit_python import PlanningSceneInterface, MoveGroupInterface
 from math import pi 
 from baxter_core_msgs.srv import (
     SolvePositionIK,
     SolvePositionIKRequest,
 )
+import moveit_commander
+import moveit_msgs.msg
 
 
 
@@ -184,7 +186,15 @@ class BaxterRangeSensor():
         
 class SceneObstacles():
     def __init__(self):
+        moveit_commander.roscpp_initialize(sys.argv)
+        self.robot = moveit_commander.RobotCommander()
         self.psi = PlanningSceneInterface("base")
+        self.group = moveit_commander.MoveGroupCommander("right_arm")
+        self.display_trajectory_publisher = rospy.Publisher('/move_group/display_planned_path',moveit_msgs.msg.DisplayTrajectory)
+        group.get_planning_frame()
+        group.get_end_effector_link()
+        print robot_get_group_names()
+        print robot.get_current_state()
         self.psi.clear()
         self.trash_loc_x = []
         self.trash_loc_y = []
