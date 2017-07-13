@@ -19,7 +19,7 @@ from baxter_core_msgs.srv import (
 )
 import moveit_commander
 import moveit_msgs.msg
-
+from moveit_msgs.msg import Grasp, GripperTranslation, PlaceLocation
 
 
 
@@ -44,7 +44,7 @@ class TagsPose(object):
             """
             self.poses = self.tag_module.getPosesForSeenIDs(stamped =0)
             if self.poses != {}:
-                return self.poses 
+                return self.poses
             
             
     def transform_pose(self, ids,t):
@@ -186,16 +186,14 @@ class BaxterRangeSensor():
         
 class SceneObstacles():
     def __init__(self):
-        moveit_commander.roscpp_initialize(sys.argv)
         self.robot = moveit_commander.RobotCommander()
+#        self.psi = moveit_commander.PlanningSceneInterface()
         self.psi = PlanningSceneInterface("base")
         self.group = moveit_commander.MoveGroupCommander("right_arm")
-        self.display_trajectory_publisher = rospy.Publisher('/move_group/display_planned_path',moveit_msgs.msg.DisplayTrajectory)
-        group.get_planning_frame()
-        group.get_end_effector_link()
-        print robot_get_group_names()
-        print robot.get_current_state()
-        self.psi.clear()
+        print self.group.get_current_joint_values()
+        self.group.get_planning_frame()
+        self.group.get_end_effector_link()
+#        self.psi.clear()
         self.trash_loc_x = []
         self.trash_loc_y = []
         self.trash_loc_z = []
@@ -205,7 +203,7 @@ class SceneObstacles():
     def addTable(self):
         # attachBox (self, "name", sizex, sizey,sizez, x, y, z, wait = True)
         self.psi.attachBox("table", 0.75, 1.52, 0.73, 0.84, 0.2, -0.55, 'base', 'pedestal', wait=True)
-        
+
     def addTrashAsObstacles(self):
         self.trashposes,self.baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
         for key, val in self.trashposes.items():
@@ -222,7 +220,7 @@ class SceneObstacles():
             self.psi.attachBox("trashcan",0.365, 0.265,0.39,1.03,-0.415, 0.01,'base','pedestal',wait= True)
             self.objectlist =['box0','box1', 'box2','box3']
             for i in xrange(len(self.trash_loc_x)):
-                self.psi.addCube(self.objectlist[i], 0.06 ,self.trash_loc_x[i], self.trash_loc_y[i],self.trash_loc_z[i], wait = True)
+                self.psi.attachBox(self.objectlist[i], 0.05 ,0.05,0.06,self.trash_loc_x[i], self.trash_loc_y[i],self.trash_loc_z[i],'base','pedestal', wait = True)
         self.psi.waitForSync()
 
     def addTrashcan(self):
@@ -238,14 +236,27 @@ class SceneObstacles():
         self.tc.pose.orientation.y = 1
         self.tc.pose.orientation.z = 0
         self.tc.pose.orientation.w =0
+        return self.tc
         
+    def moveTrashIntoTrashcan(self):
+        self.tc = SceneObstacles().addTrashcan()
+        self.littleboxes= SceneObstacles().addTrashAsObstacles()
+        print self.robot.get_current_state()
+        self.group.set_pose_target(self.tc)
+        self.plan = self.group.plan()
+        rospy.sleep(5)
         
+        self.display_trajectory = moveit_msgs.msg.DisplayTrajectory()
+        self.display_trajectory.trajectory_start = self.robot.get_current_state()
+        self.display_trajectory.trajectory.append(self.plan)
+        rospy.sleep(5)
         
         
     
 
 
 def main(args):
+    moveit_commander.roscpp_initialize(sys.argv)
     rospy.init_node("TagsPose", anonymous=True)
 #    ic = TagsPose()
 #    ic = MoveBaxter()
@@ -254,7 +265,8 @@ def main(args):
 #    x = ic.transform_pose()
 #    x = ic.makeDictofTransformedPoses()
 #    x = ic.moveArm()
-    x = ic.addTrashAsObstacles()
+#    x = ic.addTrashAsObstacles()
+    x = ic.moveTrashIntoTrashcan()
     print x
     try:
         rospy.spin()
