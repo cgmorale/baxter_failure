@@ -8,11 +8,11 @@ import baxter_interface
 from lab_ros_perception.AprilTagModule import AprilTagModule
 from apriltags_ros.msg import AprilTagDetectionArray
 from sensor_msgs.msg import Range
-from geometry_msgs.msg import PoseStamped, PoseArray
+from geometry_msgs.msg import PoseStamped, PoseArray,Pose
 import time
 import tf
 from moveit_python import PlanningSceneInterface, MoveGroupInterface
-from math import pi 
+from math import pi, radians 
 from baxter_core_msgs.srv import (
     SolvePositionIK,
     SolvePositionIKRequest,
@@ -199,6 +199,7 @@ class SceneObstacles():
         self.trash_loc_z = []
         self.size = []
         self.orien_trash = []
+#        self.t = tf.TransformListener()
         
     def addTable(self):
         # attachBox (self, "name", sizex, sizey,sizez, x, y, z, wait = True)
@@ -222,6 +223,7 @@ class SceneObstacles():
             for i in xrange(len(self.trash_loc_x)):
                 self.psi.attachBox(self.objectlist[i], 0.05 ,0.05,0.06,self.trash_loc_x[i], self.trash_loc_y[i],self.trash_loc_z[i],'base','pedestal', wait = True)
         self.psi.waitForSync()
+#        return self.trash_loc_x, self.trash_loc_y, self.trash_loc_z
 
     def addTrashcan(self):
         self.psi.attachBox("table", 0.75, 1.52, 0.73, 0.84, 0.2, -0.55, 'base', 'pedestal', wait=True)
@@ -239,19 +241,34 @@ class SceneObstacles():
         return self.tc
         
     def moveTrashIntoTrashcan(self):
-        self.tc = SceneObstacles().addTrashcan()
-        self.littleboxes= SceneObstacles().addTrashAsObstacles()
-        print self.robot.get_current_state()
-        self.group.set_pose_target(self.tc)
+#        self.tc = SceneObstacles().addTrashcan()
+#        self.littleboxes= SceneObstacles().addTrashAsObstacles()
+        
+        self.group.set_planner_id("RRTConnectkConfigDefault")
+        self.group.set_start_state_to_current_state()
+        self.group.set_planning_time(10)
+        self.group.set_num_planning_attempts(10)
+        self.group.allow_replanning(True)
+        self.group.set_max_velocity_scaling_factor(1)
+        self.group.set_goal_position_tolerance(0.01)
+        self.group.set_goal_orientation_tolerance(0.01)
+        self.pose_t = Pose()
+        self.pose_t.orientation.x = 1
+        self.pose_t.orientation.y = 0
+        self.pose_t.orientation.z = 0
+        self.pose_t.orientation.w = 0
+        self.pose_t.position.x = 0.4
+        self.pose_t.position.y = 0.1
+        self.pose_t.position.z = 0.3
+        self.group.set_pose_target(self.pose_t)
         self.plan = self.group.plan()
         rospy.sleep(5)
+        self.group.go(wait =True)
         
         self.display_trajectory = moveit_msgs.msg.DisplayTrajectory()
         self.display_trajectory.trajectory_start = self.robot.get_current_state()
         self.display_trajectory.trajectory.append(self.plan)
-        rospy.sleep(5)
-        
-        
+        rospy.sleep(5)  
     
 
 
