@@ -51,9 +51,9 @@ class TagsPose(object):
         self.newPose= t.transformPose('base',ids)
         # change the orientation (quaternions) of april tags so that the IK can work
         # need to change it so Baxter knows were to grab the tags from
-        self.newPose.pose.position.x -=0
-        self.newPose.pose.position.y +=0
-        self.newPose.pose.position.z += 0
+        self.newPose.pose.position.x +=0.025
+        self.newPose.pose.position.y +=0.06
+        self.newPose.pose.position.z -= 0.01
         self.newPose.pose.orientation.x = 0
         self.newPose.pose.orientation.y = 1.0
         self.newPose.pose.orientation.z = 0
@@ -189,20 +189,24 @@ class SceneObstacles():
         self.robot = moveit_commander.RobotCommander()
 #        self.psi = moveit_commander.PlanningSceneInterface()
         self.psi = PlanningSceneInterface("base")
+        self.psi.clear()
         self.group = moveit_commander.MoveGroupCommander("right_arm")
         print self.group.get_current_joint_values()
         self.group.get_planning_frame()
         self.group.get_end_effector_link()
+        MoveBaxter.openGripper(MoveBaxter())
 #        self.psi.clear()
         self.trash_loc_x = []
         self.trash_loc_y = []
         self.trash_loc_z = []
         self.size = []
         self.orien_trash = []
-#        self.t = tf.TransformListener()
+        self.objlist = ['table','trashcan','box0', 'box1', 'box2','box3']
+        for i in xrange(len( self.objlist)):
+            self.psi.removeCollisionObject(self.objlist[i])
         
     def addTable(self):
-        # attachBox (self, "name", sizex, sizey,sizez, x, y, z, wait = True)
+        # attachBox (self, "name", sizex, sizey,sizez, x, y, z, thing to attach to, thing it shouldnt collide, wait = True)
         self.psi.attachBox("table", 0.75, 1.52, 0.73, 0.84, 0.2, -0.55, 'base', 'pedestal', wait=True)
 
     def addTrashAsObstacles(self):
@@ -217,17 +221,20 @@ class SceneObstacles():
             self.size.append(self.trashloc.position.x)
         while self.trash_loc_x:
             self.psi.clear()
-            self.psi.attachBox('table', 0.75, 1.52, 0.73, 0.84, 0.2, -0.55,'base', 'pedestal', wait=True)
-            self.psi.attachBox("trashcan",0.365, 0.265,0.39,1.03,-0.415, 0.01,'base','pedestal',wait= True)
+#            self.psi.attachBox('table', 0.75, 1.52, 0.73, 0.84, 0.2, -0.55,'base', 'pedestal', wait=True)
+#            self.psi.attachBox("trashcan",0.365, 0.265,0.39,1.03,-0.415, 0.01,'base','pedestal',wait= True)
+            self.psi.addBox('table',0.75, 1.52,0.73, 0.84, 0.2, -0.55, wait = True)
+            self.psi.addBox('trashcan', 0.365, 0.265,0.39, 1.03, -0.415, 0.01, wait =True)
             self.objectlist =['box0','box1', 'box2','box3']
             for i in xrange(len(self.trash_loc_x)):
-                self.psi.attachBox(self.objectlist[i], 0.05 ,0.05,0.06,self.trash_loc_x[i], self.trash_loc_y[i],self.trash_loc_z[i],'base','pedestal', wait = True)
-        self.psi.waitForSync()
+#                self.psi.attachBox(self.objectlist[i], 0.05 ,0.05,0.06,self.trash_loc_x[i], self.trash_loc_y[i],self.trash_loc_z[i],'base','pedestal', wait = True)
+                self.psi.addBox(self.objectlist[i], 0.05, 0.05, 0.06, self.trash_loc_x[i], self.trash_loc_y[i], self.trash_loc_z[i], wait =True)
 #        return self.trash_loc_x, self.trash_loc_y, self.trash_loc_z
+            return self.trash_loc_x, self.trash_loc_y, self.trash_loc_z
 
     def addTrashcan(self):
-        self.psi.attachBox("table", 0.75, 1.52, 0.73, 0.84, 0.2, -0.55, 'base', 'pedestal', wait=True)
-        self.psi.attachBox("trashcan",0.365, 0.265,0.39,1.03,-0.415, 0.01,'base','pedestal',wait= True)
+#        self.psi.attachBox("table", 0.75, 1.52, 0.73, 0.84, 0.2, -0.55, 'base', 'pedestal', wait=True)
+#        self.psi.attachBox("trashcan",0.365, 0.265,0.39,1.03,-0.415, 0.01,'base','pedestal',wait= True)
         self.tc = PoseStamped()
         self.tc.header.frame_id = "camera_rgb_optical_frame"
         self.tc.header.stamp = rospy.Time.now()
@@ -242,8 +249,9 @@ class SceneObstacles():
         
     def moveTrashIntoTrashcan(self):
 #        self.tc = SceneObstacles().addTrashcan()
-#        self.littleboxes= SceneObstacles().addTrashAsObstacles()
-        
+        self.locx, self.locy, self.locz = SceneObstacles().addTrashAsObstacles()
+        self.frameattached= "base"
+        self.frameoktocollide = ['right_gripper','r_gripper_l_finger', 'r_gripper_r_finger']
         self.group.set_planner_id("RRTConnectkConfigDefault")
         self.group.set_start_state_to_current_state()
         self.group.set_planning_time(10)
@@ -257,19 +265,32 @@ class SceneObstacles():
         self.pose_t.orientation.y = 0
         self.pose_t.orientation.z = 0
         self.pose_t.orientation.w = 0
-        self.pose_t.position.x = 0.4
-        self.pose_t.position.y = 0.1
-        self.pose_t.position.z = 0.3
+        self.pose_t.position.x = self.locx[0]
+        self.pose_t.position.y = self.locy[0]
+        self.pose_t.position.z = self.locz[0] + 0.05
         self.group.set_pose_target(self.pose_t)
+        self.psi.attachBox('box0', 0.05, 0.05, 0.06, self.locx[0],self.locy[0],self.locz[0], self.frameattached,self.frameoktocollide, wait = True)
+#        self.pose_a = Pose()
+#        self.pose_a.orientation.x = 1
+#        self.pose_a.orientation.y = 0
+#        self.pose_a.orientation.z = 0
+#        self.pose_a.orientation.w = 0
+#        self.pose_a.position.x = 1.1
+#        self.pose_a.position.y = -0.45
+#        self.pose_a.position.z = 0.05
+#        self.group.set_pose_target(self.pose_a)
         self.plan = self.group.plan()
         rospy.sleep(5)
+        self.group.go(wait =True)
+        self.pose_t.position.z -= 0.07
+        self.group.set_pose_target(self.pose_t)
         self.group.go(wait =True)
         
         self.display_trajectory = moveit_msgs.msg.DisplayTrajectory()
         self.display_trajectory.trajectory_start = self.robot.get_current_state()
         self.display_trajectory.trajectory.append(self.plan)
         rospy.sleep(5)  
-    
+        MoveBaxter.closeGripper(MoveBaxter())
 
 
 def main(args):
