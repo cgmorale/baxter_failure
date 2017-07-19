@@ -5,9 +5,7 @@
 	<include file = "$(find openni_launch)/launch/openni.launch"/>
 	<include file = "$(find apriltags_ros)/launch/example.launch"/>
 	<include file = "$(find baxter_moveit_config)/launch/baxter_grippers.launch"/>
-	<node pkg="tf" type="static_transform_publisher" name="camera_link_broadcaster"
+	<node pkg="tf" type="static_transform_publisher" name="camera_link_broadcast"
         args="$(arg camera_link_pose) /base /$(arg camera)_link 100" />
-    	<node pkg="baxter_tools" type="enable_robot.py" name="enable_robot.py" args="-e" />
-    	<node pkg="rviz" type="rviz" name="reachingHandRviz"/>
-    	<node pkg="baxter_interface" type="rsdk_position_w_id_joint_trajectory_action_server.py" name="joint_trajectory_action_server.py" output="screen"/>
+    	<node pkg="rviz" type="rviz" name="BaxterFailureRviz"/>
 </launch>
