@@ -4,11 +4,12 @@ import os
 import struct
 import numpy as np
 import rospy
+import actionlib
 import baxter_interface
 from lab_ros_perception.AprilTagModule import AprilTagModule
 from apriltags_ros.msg import AprilTagDetectionArray
 from sensor_msgs.msg import Range
-from geometry_msgs.msg import PoseStamped, PoseArray,Pose
+from geometry_msgs.msg import PoseStamped, PoseArray,Pose, Vector3, Quaternion
 import time
 import copy
 import tf
@@ -20,8 +21,9 @@ from baxter_core_msgs.srv import (
 )
 import moveit_commander
 import moveit_msgs.msg
-from moveit_msgs.msg import Grasp, GripperTranslation, PlaceLocation
-
+from moveit_msgs.msg import Grasp, GripperTranslation, PlaceLocation, PlaceGoal, PlaceAction, PlaceResult
+from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
+from tf.transformations import quaternion_from_euler , euler_from_quaternion
 
 
 class TagsPose(object):
@@ -192,7 +194,7 @@ class SceneObstacles():
         self.psi = PlanningSceneInterface("base")
         self.psi.clear()
         self.group = moveit_commander.MoveGroupCommander("right_arm")
-        print self.group.get_current_joint_values()
+        #print self.group.get_current_joint_values()
         self.group.get_planning_frame()
         self.group.get_end_effector_link()
         MoveBaxter.openGripper(MoveBaxter())
@@ -229,19 +231,6 @@ class SceneObstacles():
                 self.psi.addBox(self.objectlist[i], 0.05, 0.05, 0.06, self.trash_loc_x[i], self.trash_loc_y[i], self.trash_loc_z[i], wait =True)
             return self.trash_loc_x, self.trash_loc_y, self.trash_loc_z
 
-    def addTrashcan(self):
-        self.tc = PoseStamped()
-        self.tc.header.frame_id = "camera_rgb_optical_frame"
-        self.tc.header.stamp = rospy.Time.now()
-        self.tc.pose.position.x = 1.03
-        self.tc.pose.position.y = -0.415
-        self.tc.pose.position.z = 0.1
-        self.tc.pose.orientation.x = 0
-        self.tc.pose.orientation.y = 1
-        self.tc.pose.orientation.z = 0
-        self.tc.pose.orientation.w =0
-        return self.tc
-        
     def moveTrashIntoTrashcan(self):
 #        self.tc = SceneObstacles().addTrashcan()
         self.locx, self.locy, self.locz = SceneObstacles().addTrashAsObstacles()
@@ -273,7 +262,7 @@ class SceneObstacles():
         self.waypoints.append(copy.deepcopy(self.pose_t))
 #        self.plan = self.group.plan()
         self.plan, self.fraction = self.group.compute_cartesian_path(self.waypoints, 0.01, 0.0, avoid_collisions=True)
-        print self.fraction
+        #print self.fraction
         rospy.sleep(5)
         self.group.execute(self.plan)
 #        self.group.go(wait =True)
@@ -284,6 +273,88 @@ class SceneObstacles():
         rospy.sleep(5)
         self.psi.removeCollisionObject('box0', wait = True)
         MoveBaxter.closeGripper(MoveBaxter())
+
+    def TrashcanGoal(self, attached ="box0"):
+        self.locx, self.locy, self.locz = SceneObstacles().addTrashAsObstacles()
+        self.frameattached= "base"
+        self.frameoktocollide = ['right_gripper','r_gripper_l_finger', 'r_gripper_r_finger']
+        self.psi.attachBox('box0', 0.05, 0.05, 0.06, self.locx[0],self.locy[0],self.locz[0], self.frameattached,self.frameoktocollide, wait = True)
+        self.tc = PlaceGoal()
+        self.tc.group_name = "right_arm"
+        self.tc.attached_object_name = attached
+        self.tc.allowed_planning_time = 5.0
+        self.tc.planning_options.planning_scene_diff.is_diff = True
+        self.tc.planning_options.plan_only = False
+        self.tc.planning_options.replan = True
+        self.tc.planning_options.replan_attempts =10
+        self.tc.allow_gripper_support_collision = False
+        self.tc.allowed_touch_objects = ["table"]
+        self.tc.place_locations = self.createPlaceLocation()
+        #print self.tc 
+        return self.tc
+    
+    def createGripperTranslation(self, direction_vector, desired_distance=0.07, min_distance=0.01):
+        # Gripper translation message with the direction vector, desired distance and minimum distance
+        # to fill the pre_grasp_approach and post_grasp_retreat field in the Grasp message
+        self.g_trans = GripperTranslation()
+        self.g_trans.direction.header.frame_id = "base"
+        self.g_trans.direction.header.stamp = rospy.Time.now()
+        self.g_trans.direction.vector.x = direction_vector.x
+        self.g_trans.direction.vector.y = direction_vector.y
+        self.g_trans.direction.vector.z = direction_vector.z
+        self.g_trans.desired_distance = desired_distance
+        self.g_trans.min_distance = min_distance
+        return self.g_trans 
+    
+    def getPreGraspPosture(self):
+        self.pre_grasp_posture = JointTrajectory()
+        self.pre_grasp_posture.header.frame_id= "base"
+        self.pre_grasp_posture.header.stamp= rospy.Time.now()
+        self.pre_grasp_posture.joint_names = ['right_gripper','r_gripper_l_finger', 'r_gripper_r_finger']
+        self.pos = JointTrajectoryPoint()
+        self.pos.time_from_start = rospy.Duration(3.0)
+        #self.pos.positions - can add the specific positions for the joints
+        #self.pre_grasp_posture.points.append(self.pos)
+        return self.pre_grasp_posture
+    
+    def createPlaceLocation(self):
+        self.place_locs = []
+        for yaw_angle in np.arange(0,2*pi, radians(15)):
+            
+            self.pl = PlaceLocation()
+        
+            self.pl.place_pose = PoseStamped()
+            self.pl.place_pose.pose.position.x = 1.08
+            self.pl.place_pose.pose.position.y = -0.45
+            self.pl.place_pose.pose.position.z = 0.06
+#            self.newquat = quaternion_from_euler(0.0,0.0, yaw_angle)
+#            self.pl.place_pose.pose.orientation = Quaternion(self.newquat[0],self.newquat[1], self.newquat[2], self.newquat[3])
+            self.pl.place_pose.pose.orientation.x = 1
+            self.pl.place_pose.pose.orientation.y = 0
+            self.pl.place_pose.pose.orientation.z = 0
+            self.pl.place_pose.pose.orientation.w = 0
+            self.pl.place_pose.header.frame_id = "base"
+            self.pl.place_pose.header.stamp = rospy.Time.now()
+        
+            self.pl.pre_place_approach = self.createGripperTranslation(Vector3(0,0,-1.0))
+            self.pl.post_place_retreat = self.createGripperTranslation(Vector3(0,0,1.0))
+            self.place_locs.append(self.pl)
+#        self.pl.pose_place_posture =self.getPreGraspPosture()
+        return self.place_locs
+        
+    def testMoveitGoal(self):
+        self.goal= self.TrashcanGoal()
+        self.place_ac = actionlib.SimpleActionClient('/place', PlaceAction)
+        self.place_ac.wait_for_server()
+        print("H1")
+        self.place_ac.send_goal(self.goal)
+        print("H2")
+        self.place_ac.wait_for_result()
+        print("H3")        
+        self.result = self.place_ac.get_result()
+        print(self.result)
+        
+        
 
 
 def main(args):
@@ -297,8 +368,9 @@ def main(args):
 #    x = ic.makeDictofTransformedPoses()
 #    x = ic.moveArm()
 #    x = ic.addTrashAsObstacles()
-    x = ic.moveTrashIntoTrashcan()
-    print x
+#    x = ic.moveTrashIntoTrashcan()
+    x = ic.testMoveitGoal()
+    #print x
     try:
         rospy.spin()
     except KeyboardInterrupt:
