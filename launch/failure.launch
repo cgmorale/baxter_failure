@@ -4,7 +4,7 @@
 	<arg name="camera_link_pose" default="0.25 -0.04 0.79 0.0 0.95 0.0"/>
 	<include file = "$(find openni_launch)/launch/openni.launch"/>
 	<include file = "$(find apriltags_ros)/launch/example.launch"/>
-	<include file = "$(find baxter_moveit_config)/launch/baxter_grippers.launch"/>
+	<!-- include file = "$(find baxter_moveit_config)/launch/baxter_grippers.launch"/>-->
 	<node pkg="tf" type="static_transform_publisher" name="camera_link_broadcast"
         args="$(arg camera_link_pose) /base /$(arg camera)_link 100" />
     	<node pkg="rviz" type="rviz" name="BaxterFailureRviz"/>

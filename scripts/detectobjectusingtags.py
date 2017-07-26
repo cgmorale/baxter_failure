@@ -21,10 +21,10 @@ from baxter_core_msgs.srv import (
 )
 import moveit_commander
 import moveit_msgs.msg
-from moveit_msgs.msg import Grasp, GripperTranslation, PlaceLocation, PlaceGoal, PlaceAction, PlaceResult, PickupAction,MoveItErrorCodes, GenerateGraspsAction, PickupGoal
+from moveit_msgs.msg import Grasp, GripperTranslation, PlaceLocation, PlaceGoal, PlaceAction, PlaceResult, PickupAction,MoveItErrorCodes, PickupGoal
 from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
 from tf.transformations import quaternion_from_euler , euler_from_quaternion
-from action.lib_msgs import GoalStatus
+from actionlib_msgs.msg import GoalStatus
 from moveit_simple_grasps.msg import GenerateGraspsAction, GenerateGraspsGoal, GraspGeneratorOptions
 
 moveit_error_dict = {}
@@ -288,18 +288,23 @@ class Pick_and_Place:
     def __init__(self):
         self._table_object_name = 'table'
         self._grasp_object_name = 'box0'
-        self._target = 'table'
+        self._target = 'trashcan'
         self._group = 'right_arm'
         
-        self._grasp_object_width = 0.05
+#        self.grasp_action()
+        self.pickup_action()
+        self.place_action()
         
+        self._grasp_object_width = 0.05
         self.robot = moveit_commander.RobotCommander()
         self.psi = PlanningSceneInterface("base")
+        rospy.sleep(1.0)
         self.psi.clear()
-        
+        print "H1"
         self._arm_group = moveit_commander.MoveGroupCommander('right_arm')
         self._gripper_group = moveit_commander.MoveGroupCommander('right_gripper')
-        
+        rospy.slePickPlaceActionep(5.0)
+        print "H2"
         self.group.get_planning_frame()
         self.group.get_end_effector_link()
         
@@ -321,32 +326,26 @@ class Pick_and_Place:
         self._arm_group.set_max_velocity_scaling_factor(1)
         self._arm_group.set_goal_position_tolerance(0.01)
         self._arm_group.set_goal_orientation_tolerance(0.01)
+         
         
-        self.grasp_action()
-        self.pickup_action()
-        self.place_action()
-        
-        
-    def TrashPickUp(self, target= "trashcan"):
-        self.target_name = target
+    def TrashPickUp(self):
         self.group_name = ['right_gripper']
         self.end_effector = ['r_gripper_l_finger','r_gripper_r_finger']
+        self._pickup(self._target, self._grasp_object_width)
+        self._place(self._group,self._grasp_object_name)
+    
+    def box0pose(self):
+        self.locx, self.locy, self.locz = SceneObstacles().addTrashAsObstacles()
         
-
-    def TrashcanGoal(self, attached ="box0"):
-        self.psi.attachBox('box0', 0.05, 0.05, 0.06, self.locx[0],self.locy[0],self.locz[0], self.frameattached,self.frameoktocollide, wait = True)
-        self.tc = PlaceGoal()
-        self.tc.group_name = "right_arm"
-        self.tc.attached_object_name = attached
-        self.tc.allowed_planning_time = 5.0
-        self.tc.planning_options.planning_scene_diff.is_diff = True
-        self.tc.planning_options.plan_only = False
-        self.tc.planning_options.replan = True
-        self.tc.planning_options.replan_attempts =10
-        self.tc.allow_gripper_support_collision = False
-        self.tc.allowed_touch_objects = ["table"]
-        self.tc.place_locations = self.createPlaceLocation()
-        return self.tc
+        self._pose_place = Pose()
+        self._pose_place.position.x = self.locx[0] 
+        self._pose_place.position.y = self.locy[0]
+        self._pose_place.position.z = self.locz[0]
+        self._pose_place.orientation.x = 1
+        self._pose_place.orientation.y = 0
+        self._pose_place.orientation.z = 0
+        self._pose_place.orientation.w = 0
+        return self._pose_place        
     
     def createGripperTranslation(self, direction_vector, desired_distance=0.05, min_distance=0.01):
         # Gripper translation message with the direction vector, desired distance and minimum distance
@@ -387,7 +386,7 @@ class Pick_and_Place:
             self.pl.place_pose.header.frame_id = "base"
             self.pl.place_pose.header.stamp = rospy.Time.now()
         
-            self.pl.pre_place_approach = self.createGripperTranslation(Vector3(0,0,-1.0))
+            self.PickPlaceActionpl.pre_place_approach = self.createGripperTranslation(Vector3(0,0,-1.0))
             self.pl.post_place_retreat = self.createGripperTranslation(Vector3(0,0,1.0))
             self.place_locs.append(self.pl)
 #        self.pl.pose_place_posture =self.getPreGraspPosture()
@@ -395,6 +394,7 @@ class Pick_and_Place:
         
     
     def _create_place_goal(self,group,target,places):
+        self.psi.attachBox('box0', 0.05, 0.05, 0.06, self.locx[0],self.locy[0],self.locz[0], self.frameattached,self.frameoktocollide, wait = True)
         goal = PlaceGoal()
         goal.group_name = group
         goal.attached_object_name = target
@@ -407,19 +407,23 @@ class Pick_and_Place:
         goal.planning_options.planning_scene_diff.robot_state.is_diff = True
         goal.planning_options.plan_only = False
         goal.planning_options.replan = True
+        goal.allow_gripper_support_collision = False
         goal.planning_options.replan_attempts = 10
         
         return goal
+        
     
-    def _create_pickup_goal(self,group,target,grasps):
+    def _create_pickup_goal(self,group,target):
+        self._table_object_name = 'table'
+        
         goal = PickupGoal()
         goal.group_name = group
         goal.target_name = target
         
-        goal.possible_grasps.extend(grasps)
+#        goal.possible_grasps.extend(grasps)
         
         goal.allowed_touch_objects.append(target)
-        goal.support_surface_name = self.table_object_name
+        goal.support_surface_name = self._table_object_name
         goal.allowed_planning_time = 5.0
         
         goal.planning_options.planning_scene_diff.is_diff = True
@@ -429,7 +433,6 @@ class Pick_and_Place:
         goal.planning_options.replan_attempts = 10
         
         return goal 
-        
         
     
     def _generate_grasps(self,pose,width):
@@ -441,7 +444,7 @@ class Pick_and_Place:
         options.grasp_direction = GraspGeneratorOptions.GRASP_DIRECTION_UP
         options.grasp_rotation = GraspGeneratorOptions.GRASP_ROTATION_FULL
         
-        state = self._grasps_ac.send_goal_and_wait(goal)
+        state = grasps_ac.send_goal_and_wait(goal)
         
         if state != GoalStatus.SUCCEEDED:
             rospy.logerr('Grasp goal failed!: %s' % self._grasps_ac.get_goal_status_text())
@@ -454,25 +457,28 @@ class Pick_and_Place:
     def _pickup(self, target, width):
         MoveBaxter.openGripper(MoveBaxter())
         
-        grasps = self._generate_grasps() #grab the pose from the Aruco tags
+        self._grasp_object_width = 0.05
+        self._group = 'right_arm'
         
-        goal = self._create_pickup_goal(self._group,self._target, grasps)
+        pose = self.box0pose()
+#        grasps = self._generate_grasps(pose,self._grasp_object_width)
+        
+        goal = self._create_pickup_goal(self._group,'box0')
         
         state = self._pickup_ac.send_goal_and_wait(goal)
         
         if state != GoalStatus.SUCCEEDED:
-            rospy.logerr('Pick up goal failer!: %s' %self._pickup_ac.get_goal_status_text())
+            rospy.logerr('Pick up goal failed!: %s' %self._pickup_ac.get_goal_status_text())
             return None
             
         result = self._pickup_ac.get_result()
-        
         err = result.error_code.val
         if err != MoveItErrorCodes.SUCCESS:
-            rospy.logwarn('Group %s cannot place target %s!: %s' % (self._group, self._target, str(moveit_error_dict[err])))
+            rospy.logwarn('Group %s cannot place target %s!: %s' % (self._group, 'box0', str(moveit_error_dict[err])))
             return False
         return True
     
-    def _place(self,group,target,place):
+    def _place(self,group,target):
         
         places = self.createPlaceLocation()
         goal = self._create_place_goal(group,target,places)
@@ -492,19 +498,22 @@ class Pick_and_Place:
             
 
     def pickup_action(self):
+        self._grasp_object_width = 0.05
+        self._grasp_object_name = 'box0'
+        
         self._pickup_ac = actionlib.SimpleActionClient('/pickup', PickupAction)
-        if not self._pickup_ac.wait_for_server(rospy.Duration(5.0)):
+        if not self._pickup_ac.wait_for_server():
             rospy.logerr('Pick up action client not available!')
             rospy.signal_shutdown('Pick up action client not available!')
             return
-        while not self._pickup(self._arm_group, self._grasp_object_name, self._grasp_object_width):
+        while not self._pickup( self._grasp_object_name, self._grasp_object_width):
             rospy.logwarn('Pick up failed! Retrying...')
             rospy.sleep(1.0)
         rospy.loginfo('Pick up successfully!')
         
     def grasp_action(self):
-        self._grasps_ac= actionlib.SimpleActionClient('/moveit_simple_grasps_server/generate', GenerateGraspsAction)
-        if not self._grasps_ac.wait_for_server(rospy.Duration(5.0)):
+        grasps_ac= actionlib.SimpleActionClient('/moveit_simple_grasps_server/generate', GenerateGraspsAction)
+        if not grasps_ac.wait_for_server(rospy.Duration(5.0)):
             rospy.logerr('Grasp generator action client not available!')
             rospy.signal_shutdown('Grasp generator action client not available!')
             return 
@@ -526,15 +535,17 @@ def main(args):
     rospy.init_node("TagsPose", anonymous=True)
 #    ic = TagsPose()
 #    ic = MoveBaxter()
-    ic = SceneObstacles()
+#    ic = SceneObstacles()
+    ic = Pick_and_Place()
 #    x = ic.getDictofPoses()
 #    x = ic.transform_pose()
 #    x = ic.makeDictofTransformedPoses()
 #    x = ic.moveArm()
 #    x = ic.addTrashAsObstacles()
 #    x = ic.moveTrashIntoTrashcan()
-    x = ic.testMoveitGoal()
-    #print x
+#    x = ic.testMoveitGoal()
+    x = ic.TrashPickUp()
+    print x
     try:
         rospy.spin()
     except KeyboardInterrupt:
