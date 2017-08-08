@@ -746,7 +746,7 @@ class Pick_and_Place:
         goal = self._create_pickup_goal(self._group,'box0', grasps)
         print goal
         state = self._pickup_ac.send_goal_and_wait(goal)
-        print self._pickup_ac.get_state()
+
         print state
         if state != GoalStatus.SUCCEEDED:
             rospy.logerr('Pick up goal failed!: %s' %self._pickup_ac.get_goal_status_text())

@@ -6,6 +6,7 @@ import rospy
 from grasps_server import GraspClass
 from actionlib import SimpleActionClient, SimpleActionServer
 from moveit_commander import PlanningSceneInterface
+from moveit_python import PlanningSceneInterface as MoveitPSI
 from moveit_msgs.msg import PickupAction, PickupGoal, MoveItErrorCodes
 from moveit_msgs.msg import PlaceAction, PlaceGoal
 from geometry_msgs.msg import Pose, PoseStamped, PoseArray, Vector3Stamped, Vector3, Quaternion
@@ -65,13 +66,14 @@ def createPlaceGoal(place_pose, place_locations, group = "right_arm", target ="b
 class SceneObstacles():
     def __init__(self):
         self.robot = moveit_commander.RobotCommander()
-        self.psi = PlanningSceneInterface("base")
-        self.psi.clear()
+        self.psi = PlanningSceneInterface()
+        self.mpsi = MoveitPSI("base")
+        self.mpsi.clear()
         self.group = moveit_commander.MoveGroupCommander("right_arm")
         #print self.group.get_current_joint_values()
         self.group.get_planning_frame()
         self.group.get_end_effector_link()
-        self.psi.clear()
+        self.mpsi.clear()
         self.trash_loc_x = []
         self.trash_loc_y = []
         self.trash_loc_z = []
@@ -79,11 +81,10 @@ class SceneObstacles():
         self.orien_trash = []
         self.objlist = ['table','trashcan','box0', 'box1', 'box2','box3']
         for i in xrange(len( self.objlist)):
-            self.psi.removeCollisionObject(self.objlist[i])
+            self.mpsi.removeCollisionObject(self.objlist[i])
         
 
     def addTrashAsObstacles(self):
-        ##TODO: make a server/client for tagspose
         self.trashposes,self.baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
         for key, val in self.trashposes.items():
             val = self.trashposes[key]
@@ -94,12 +95,12 @@ class SceneObstacles():
             self.orien_trash.append(self.trashloc.position.z*pi/180)
             self.size.append(self.trashloc.position.x)
         while self.trash_loc_x:
-            self.psi.clear()
-            self.psi.addBox('table',0.75, 1.52,0.73, 0.84, 0.2, -0.55, wait = True)
-            self.psi.addBox('trashcan', 0.365, 0.265,0.39, 1.03, -0.415, 0.01, wait =True)
+            self.mpsi.clear()
+            self.mpsi.addBox('table',0.75, 1.52,0.73, 0.84, 0.2, -0.55, wait = True)
+            self.mpsi.addBox('trashcan', 0.365, 0.265,0.39, 1.03, -0.415, 0.01, wait =True)
             self.objectlist =['box0','box1', 'box2','box3']
             for i in xrange(len(self.trash_loc_x)):
-                self.psi.addBox(self.objectlist[i], 0.05, 0.05, 0.06, self.trash_loc_x[i], self.trash_loc_y[i], self.trash_loc_z[i], wait =True)
+                self.mpsi.addBox(self.objectlist[i], 0.05, 0.05, 0.06, self.trash_loc_x[i], self.trash_loc_y[i], self.trash_loc_z[i], wait =True)
             return self.trash_loc_x, self.trash_loc_y, self.trash_loc_z
 
     def moveTrashIntoTrashcan(self):
@@ -127,7 +128,7 @@ class SceneObstacles():
         self.pose_t.position.z = self.locz[0] + 0.05
         self.waypoints.append(copy.deepcopy(self.pose_t))
 #        self.group.set_pose_target(self.pose_t)
-        self.psi.attachBox('box0', 0.05, 0.05, 0.06, self.locx[0],self.locy[0],self.locz[0], self.frameattached,self.frameoktocollide, wait = True)
+        self.mpsi.attachBox('box0', 0.05, 0.05, 0.06, self.locx[0],self.locy[0],self.locz[0], self.frameattached,self.frameoktocollide, wait = True)
         self.pose_t.position.z -=0.03 
         self.waypoints.append(copy.deepcopy(self.pose_t))
 #        self.plan = self.group.plan()
@@ -141,7 +142,7 @@ class SceneObstacles():
         self.display_trajectory.trajectory_start = self.robot.get_current_state()
         self.display_trajectory.trajectory.append(self.plan)
         rospy.sleep(5)
-        self.psi.removeCollisionObject('box0', wait = True)
+        self.mpsi.removeCollisionObject('box0', wait = True)
 
 
 class PickAndPlaceServer():
@@ -172,8 +173,9 @@ class PickAndPlaceServer():
         
         self.place_as = SimpleActionServer('/place_pose', PickUpPoseAction, execute_cb = self.place_cb,  auto_start = False)
         self.place_as.start()
-       
-       
+        self.psi = PlanningSceneInterface()
+        self.mpsi = MoveitPSI("base")
+        
     def pick_cb(self, goal):
         error_code = self.grasp_object(goal.object_pose)
         p_res = PickUpPoseResult()
@@ -212,6 +214,7 @@ class PickAndPlaceServer():
         
         
     def grasp_object(self, object_pose):
+        self.trash_loc_x, self.trash_loc_y, self.trash_loc_z = SceneObstacles().addTrashAsObstacles()
         rospy.loginfo("Removing any previous object")
         self.scene.remove_attached_object("right_arm")
         self.scene.remove_world_object("box0")
@@ -222,9 +225,14 @@ class PickAndPlaceServer():
         rospy.loginfo("Adding new object")
         
         #### TODO: add scene obstacles from code in detectobjectusing tags
+#        self.psi.clear()
+        self.mpsi.addBox('table',0.75, 1.52,0.73, 0.84, 0.2, -0.55, wait = True)
+        self.mpsi.addBox('trashcan', 0.365, 0.265,0.39, 1.03, -0.415, 0.01, wait =True)
+        self.objectlist =['box0','box1', 'box2','box3']
+        for i in xrange(len(self.objectlist)):
+            self.mpsi.addBox(self.objectlist[i], 0.05, 0.05, 0.06, self.trash_loc_x[i], self.trash_loc_y[i], self.trash_loc_z[i], wait =True)
         
         possible_grasps = self.gc.create_grasps_from_object_pose(object_pose)
-        self.pickup_ac
         goal = createPickupGoal("right_arm","box0", object_pose, possible_grasps, self.links_to_allow_contact)
         self.loginfo("Sending goal")
         self.pickup_ac.send_goal(goal)

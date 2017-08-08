@@ -254,18 +254,18 @@ class GraspClass():
         g_trans.min_distance = min_distance
         return g_trans
 
-if __name__ =='__main__':
-    rospy.init_node("grasps_server")
-    g = GraspClass()
-    ps = PoseStamped()
-    ps.header.frame_id = 'base'
-    ps.pose.position.x = 0.2
-    ps.pose.position.y = 0.0
-    ps.pose.position.z = 0.2
-    ps.pose.orientation.w = 1.0
-    while not rospy.is_shutdown():
-        g.create_grasps_from_object_pose(ps)
-        rospy.sleep(1.0)
+#if __name__ =='__main__':
+#    rospy.init_node("grasps_server")
+#    g = GraspClass()
+#    ps = PoseStamped()
+#    ps.header.frame_id = 'base'
+#    ps.pose.position.x = 0.2
+#    ps.pose.position.y = 0.0
+#    ps.pose.position.z = 0.2
+#    ps.pose.orientation.w = 1.0
+#    while not rospy.is_shutdown():
+#        g.create_grasps_from_object_pose(ps)
+#        rospy.sleep(1.0)
         
         
                 
