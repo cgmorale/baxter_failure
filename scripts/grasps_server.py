@@ -81,7 +81,7 @@ class GraspClass():
         self.min_degrees_pitch = 0
         self.step_degrees_pitch = 10
         
-        self.gripper_joint_names = 'r_gripper_l_finger r_gripper_r_finger'
+        self.gripper_joint_names = ['right_s0', 'right_s1']
         self.gripper_pre_grasp_positions = "0.038 0.038"
         
         self.time_pre_grasp_posture = 2.0
@@ -89,7 +89,6 @@ class GraspClass():
         self.time_grasp_posture_final = 3.0
         
         self.gripper_grasp_positions = "0.015 0.015"
-        
         self.grasp_quality = 0.1
         
         self.fix_tool_frame_to_grasping_frame_roll = -90.0
@@ -99,16 +98,16 @@ class GraspClass():
         self.grasp_pose_frame_id = "base"
         self.grasp_postures_frame_id = "base" # check the frame 
         
-        self.pre_grasp_direction_x = 1.0
+        self.pre_grasp_direction_x = 0.0
         self.pre_grasp_direction_y = 0.0
-        self.pre_grasp_direction_z = 0.0
+        self.pre_grasp_direction_z = 1.0
         
         self.grasp_desired_distance = 0.20
         self.grasp_min_distance= 0.0
         
-        self.post_grasp_direction_x = -1.0
+        self.post_grasp_direction_x = 0.0
         self.post_grasp_direction_y = 0.0
-        self.post_grasp_direction_z = 0.0
+        self.post_grasp_direction_z = -1.0
         
         self.max_contact_force = 1.0
         self.allowed_touch_objects = "box0"
@@ -166,12 +165,11 @@ class GraspClass():
             
         pre_grasp_posture = JointTrajectory()
         pre_grasp_posture.header.frame_id = self.grasp_postures_frame_id
-        pre_grasp_posture.joint_names = [name for name in self.gripper_joint_names.split()]
+        pre_grasp_posture.joint_names.extend(self.gripper_joint_names)
         jtpoint = JointTrajectoryPoint()
         jtpoint.positions = [float(pos) for pos in self.gripper_pre_grasp_positions.split()]
         jtpoint.time_from_start = rospy.Duration(self.time_pre_grasp_posture)
         pre_grasp_posture.points.append(jtpoint)
-        
         grasp_posture = copy.deepcopy(pre_grasp_posture)
         grasp_posture.points[0].time_from_start= rospy.Duration(self.time_pre_grasp_posture + self.time_grasp_posture)
         jtpoint2 = JointTrajectoryPoint()
@@ -192,7 +190,11 @@ class GraspClass():
         q = quaternion_multiply(q, fix_tool_to_gripper_rotation_q)
         fixed_pose = copy.deepcopy(pose)
         fixed_pose.orientation = Quaternion(*q)
-            
+        fixed_pose.orientation.x = 0
+        fixed_pose.orientation.y = 0
+        fixed_pose.orientation.z = 0
+        fixed_pose.orientation.w = 1
+        
         g.grasp_pose = PoseStamped(header,fixed_pose)
         g.grasp_quality = self.grasp_quality
             
@@ -225,7 +227,7 @@ class GraspClass():
         place_locs = []
         pre_grasp_posture = JointTrajectory()
         pre_grasp_posture.header.frame_id = self.grasp_pose_frame_id
-        pre_grasp_posture.joint_names = [name for name in self.gripper_joint_names.split()]
+        pre_grasp_posture.joint_names.extend(self.gripper_joint_names)
         jtpoint = JointTrajectoryPoint()
         jtpoint.positions = [float(pos) for pos in self.gripper_pre_grasp_positions.split()]
         jtpoint.time_from_start = rospy.Duration(self.time_pre_grasp_posture)
@@ -236,8 +238,8 @@ class GraspClass():
             pl.place_pose = posestamped
             newquat = quaternion_from_euler(0.0,0.0, yaw_angle)
             pl.place_pose.pose.orientation = Quaternion(newquat[0], newquat[1], newquat[2], newquat[3])
-            pl.pre_place_approach = self.createGripperTranslation(Vector3(1.0, 0.0, 0.0))
-            pl.post_place_retreat = self.createGripperTranslation(Vector3(-1.0, 0.0,0.0))
+            pl.pre_place_approach = self.createGripperTranslation(Vector3(0.0, 0.0, 1.0))
+            pl.post_place_retreat = self.createGripperTranslation(Vector3(0.0, 0.0,-1.0))
             pl.post_place_posture = pre_grasp_posture
             place_locs.append(pl)
         return place_locs

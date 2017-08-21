@@ -20,7 +20,7 @@ import moveit_msgs.msg
 from math import pi
 import baxter_interface
 from lab_ros_perception.AprilTagModule import AprilTagModule
-
+from client_pick import TagsPose
 
 
 moveit_error_dict = {}
@@ -30,18 +30,20 @@ for name in MoveItErrorCodes.__dict__.keys():
          moveit_error_dict[code] = name
 
 
-def createPickupGoal(group = "right_arm", target = "box0", grasp_pose = PoseStamped(), possible_grasps = [], links_to_allow_contact = None):
+def createPickupGoal(group = "right_arm", target = "box0",  possible_grasps = [], links_to_allow_contact = None):
     pug = PickupGoal()
     pug.target_name = target
     pug.group_name = group
     pug.possible_grasps.extend(possible_grasps)
+    pug.end_effector = "right_hand"
+    pug.support_surface_name= "table"
     pug.allowed_planning_time = 10.0
     pug.planning_options.planning_scene_diff.is_diff = True
     pug.planning_options.planning_scene_diff.robot_state.is_diff = True
     pug.planning_options.plan_only = False
     pug.planning_options.replan = True
     pug.planning_options.replan_attempts = 5.0
-    pug.allowed_touch_objects = []
+    pug.allowed_touch_objects = ["box0"]
     pug.attached_object_touch_links = ['<octomap>']
     pug.attached_object_touch_links.extend(links_to_allow_contact)
     return pug
@@ -99,14 +101,14 @@ class SceneObstacles():
             self.mpsi.addBox('table',0.75, 1.52,0.73, 0.84, 0.2, -0.55, wait = True)
             self.mpsi.addBox('trashcan', 0.365, 0.265,0.39, 1.03, -0.415, 0.01, wait =True)
             self.objectlist =['box0','box1', 'box2','box3']
-            for i in xrange(len(self.trash_loc_x)):
-                self.mpsi.addBox(self.objectlist[i], 0.05, 0.05, 0.06, self.trash_loc_x[i], self.trash_loc_y[i], self.trash_loc_z[i], wait =True)
+            for i in xrange(1):
+                self.mpsi.addBox('box0', 0.05, 0.05, 0.06, self.trash_loc_x[0], self.trash_loc_y[0], self.trash_loc_z[0], wait =True)
             return self.trash_loc_x, self.trash_loc_y, self.trash_loc_z
 
     def moveTrashIntoTrashcan(self):
         self.locx, self.locy, self.locz = SceneObstacles().addTrashAsObstacles()
         self.frameattached= "base"
-        self.frameoktocollide = ['right_gripper','r_gripper_l_finger', 'r_gripper_r_finger']
+        self.frameoktocollide = ['right_hand']
         self.group.set_planner_id("RRTConnectkConfigDefault")
         self.group.set_start_state_to_current_state()
         self.group.set_planning_time(10)
@@ -167,7 +169,7 @@ class PickAndPlaceServer():
         self.clear_octomap_srv.wait_for_service()
         rospy.loginfo("Connected!")
                 
-        self.links_to_allow_contact = 'r_gripper_l_finger r_gripper_r_finger'
+        self.links_to_allow_contact = ['right_s0', 'right_s1']
         self.pick_as= SimpleActionServer('/pickup_pose', PickUpPoseAction, execute_cb = self.pick_cb, auto_start = False)
         self.pick_as.start()
         
@@ -216,7 +218,7 @@ class PickAndPlaceServer():
     def grasp_object(self, object_pose):
         self.trash_loc_x, self.trash_loc_y, self.trash_loc_z = SceneObstacles().addTrashAsObstacles()
         rospy.loginfo("Removing any previous object")
-        self.scene.remove_attached_object("right_arm")
+#        self.scene.remove_attached_object("right_arm")
         self.scene.remove_world_object("box0")
         self.scene.remove_world_object("table")
         rospy.loginfo("Clearing octomap")
@@ -226,15 +228,15 @@ class PickAndPlaceServer():
         
         #### TODO: add scene obstacles from code in detectobjectusing tags
 #        self.psi.clear()
-        self.mpsi.addBox('table',0.75, 1.52,0.73, 0.84, 0.2, -0.55, wait = True)
-        self.mpsi.addBox('trashcan', 0.365, 0.265,0.39, 1.03, -0.415, 0.01, wait =True)
-        self.objectlist =['box0','box1', 'box2','box3']
-        for i in xrange(len(self.objectlist)):
-            self.mpsi.addBox(self.objectlist[i], 0.05, 0.05, 0.06, self.trash_loc_x[i], self.trash_loc_y[i], self.trash_loc_z[i], wait =True)
+#        self.mpsi.addBox('table',0.75, 1.52,0.73, 0.84, 0.2, -0.55, wait = True)
+#        self.mpsi.addBox('trashcan', 0.365, 0.265,0.39, 1.03, -0.415, 0.01, wait =True)
+#        self.objectlist =['box0','box1', 'box2','box3']
+#        for i in xrange(len(self.objectlist)):
+#            self.mpsi.addBox(self.objectlist[i], 0.05, 0.05, 0.06, self.trash_loc_x[i], self.trash_loc_y[i], self.trash_loc_z[i], wait =True)
         
         possible_grasps = self.gc.create_grasps_from_object_pose(object_pose)
-        goal = createPickupGoal("right_arm","box0", object_pose, possible_grasps, self.links_to_allow_contact)
-        self.loginfo("Sending goal")
+        goal = createPickupGoal("right_arm","box0", possible_grasps, self.links_to_allow_contact)
+        rospy.loginfo("Sending goal")
         self.pickup_ac.send_goal(goal)
         self.pickup_ac.wait_for_result()
         result = self.pickup_ac.get_result()
