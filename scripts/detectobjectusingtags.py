@@ -226,6 +226,8 @@ class PickPlace(object):
         self.move_to_joint_position(joint_angles)
     
     def servo_to_trash(self,pose):
+        descend = copy.deepcopy(pose)
+        descend.position.z = pose.position.z - 0.1
         joint_angles = TagsPose.checkValidPose(TagsPose(), pose)
         self.move_to_joint_position(joint_angles)
         
@@ -306,37 +308,39 @@ def main(args):
     limb = "right"
 #    PickPlace.load_gazebo_models(PickPlace(limb))
 #    rospy.on_shutdown(PickPlace.delete_gazebo_models(PickPlace(limb)))
-    pnp = PickPlace(limb)
-    trash_loc_x = []
-    trash_loc_y = []
-    trash_loc_z = []
-    trashposes, baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
-    for key, val in trashposes.items():
-        val = trashposes[key]
-        trashloc = val.pose
-        trash_loc_x.append(trashloc.position.x)
-        trash_loc_y.append(trashloc.position.y)
-        trash_loc_z.append(trashloc.position.z)
-    for i in xrange(len(trash_loc_x)): 
-        block_pose = Pose()
-        block_pose.position.x = trash_loc_x[i]
-        block_pose.position.y = trash_loc_y[i]
-        block_pose.position.z = trash_loc_z[i]
-        block_pose.orientation.x = 0.0
-        block_pose.orientation.y = 0.0
-        block_pose.orientation.z = 0.0
-        block_pose.orientation.w = 1.0
-        block_reference_frame = "base"
-        pnp.pick(block_pose)
-        trash_pose = Pose()
-        trash_pose.position.x = 0.85
-        trash_pose.position.y = -0.44
-        trash_pose.position.z = 0.38
-        trash_pose.orientation.x = 0.0968
-        trash_pose.orientation.y = 0.96
-        trash_pose.orientation.z = -0.06
-        trash_pose.orientation.w = 0.27
-        pnp.place(trash_pose)
+    x = 1
+    while x ==1: 
+        pnp = PickPlace(limb)
+        trash_loc_x = []
+        trash_loc_y = []
+        trash_loc_z = []
+        trashposes, baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
+        for key, val in trashposes.items():
+            val = trashposes[key]
+            trashloc = val.pose
+            trash_loc_x.append(trashloc.position.x)
+            trash_loc_y.append(trashloc.position.y)
+            trash_loc_z.append(trashloc.position.z)
+        for i in xrange(len(trash_loc_x)): 
+            block_pose = Pose()
+            block_pose.position.x = trash_loc_x[i]
+            block_pose.position.y = trash_loc_y[i]
+            block_pose.position.z = trash_loc_z[i]
+            block_pose.orientation.x = 0.0
+            block_pose.orientation.y = 0.0
+            block_pose.orientation.z = 0.0
+            block_pose.orientation.w = 1.0
+            block_reference_frame = "base"
+            pnp.pick(block_pose)
+            trash_pose = Pose()
+            trash_pose.position.x = 0.85
+            trash_pose.position.y = -0.44
+            trash_pose.position.z = 0.38
+            trash_pose.orientation.x = 0.0968
+            trash_pose.orientation.y = 0.96
+            trash_pose.orientation.z = -0.06
+            trash_pose.orientation.w = 0.27
+            pnp.place(trash_pose)
 
     try:
         rospy.spin()
