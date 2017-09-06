@@ -6,7 +6,7 @@ import rospkg
 import rospy
 import baxter_interface
 from lab_ros_perception.AprilTagModule import AprilTagModule
-from sensor_msgs.msg import Range
+from sensor_msgs.msg import Range, Image
 from geometry_msgs.msg import PoseStamped,Pose, Point
 from std_msgs.msg import Header
 import time
@@ -17,7 +17,9 @@ from baxter_core_msgs.srv import (
     SolvePositionIKRequest,
 )
 from gazebo_msgs.srv import SpawnModel, DeleteModel
-
+import cv2
+import cv_bridge
+import std_srvs.srv
 
 class TagsPose(object):
     def __init__(self):
@@ -49,8 +51,8 @@ class TagsPose(object):
         self.newPose= t.transformPose('base',ids)
         # change the orientation (quaternions) of april tags so that the IK can work
         # need to change it so Baxter knows were to grab the tags from
-        self.newPose.pose.position.x -=0.00
-        self.newPose.pose.position.y +=0.04
+        self.newPose.pose.position.x +=0.04
+        self.newPose.pose.position.y +=0.055
         self.newPose.pose.position.z -= 0.01
         self.newPose.pose.orientation.x = 0
         self.newPose.pose.orientation.y = 1.0
@@ -99,8 +101,18 @@ class TagsPose(object):
                 self.jointAngles[key] = validTransformed
                 self.transformedDict[key] = transformed
         return self.transformedDict , self.jointAngles 
-    
+
+class IRSensor(object):
+    def __init__(self):
+        self.distance= {}
+        root_name = "/robot/range/"
+        sensor_name = "right_hand_range/state"
+        self._right_sensor = rospy.Subscriber(root_name + sensor_name, Range, callback = self._sensorCallback,callback_args = 'right', queue_size = 1)
         
+    def _sensorCallback(self,msg, side):
+        
+        self.distance[side] = msg.range
+        rangeofIR = self.distance.get('right')
 
 class MoveBaxter(object):
     def __init__(self):
@@ -124,6 +136,60 @@ class MoveBaxter(object):
         #closes the gripper
         self.gripper.command_position(position=100.0, block =True,timeout=5.0)
         self.gripper.close()
+        return
+        
+    def changeBaxterFace(self, path):
+        img = cv2.imread(path)
+        msg = cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="bgr8")
+        pub = rospy.Publisher('/robot/xdisplay', Image, latch=True, queue_size=1)
+        pub.publish(msg)
+        # Sleep to allow for image to be published.
+        rospy.sleep(1)
+    
+            
+    
+  
+    def open_camera(self, camera):
+        if camera== "right":
+            cam = baxter_interface.camera.CameraController("right_hand_camera")
+        elif camera== "head":
+            cam = baxter_interface.camera.CameraController("head_camera")
+        else:
+            sys.exit("Error - invalid camera")
+        cam.open()
+        rospy.sleep(1.0)
+        
+    def close_camera(self, camera):
+        if camera== "right":
+            cam = baxter_interface.camera.CameraController("right_hand_camera")
+        elif camera== "head":
+            cam = baxter_interface.camera.CameraController("head_camera")
+        else:
+            sys.exit("Error - invalid camera")
+        cam.close()
+        rospy.sleep(1.0)
+        
+    def camera_callback(self, data, camera_name):
+        try:
+            self.cv_image= cv_bridge.CvBridge().imgmsg_to_cv2(data,"bgr8")
+        except cv_bridge.CvBridgeError,e:
+            print e
+    
+    def right_camera_callback(self, data):
+        self.camera_callback(data, "Right Hand Camera")
+    
+    def subscribe_to_camera(self,camera):
+        if camera =="right":
+            callback = self.right_camera_callback
+            camera_str = "/cameras/right_hand_camera/image"
+        else:
+            sys.exit("Error- subscribe to camera is invalid")
+        camera_sub =rospy.Subscriber(camera_str, Image, camera_callback)
+        
+    def reset_cameras(self):
+        reset_srv = rospy.ServiceProxy('cameras/reset',std_srvs.srv.Empty)
+        rospy.wait_for_service('cameras/reset',timeout = 10)
+        reset_srv()
         
 
 class PickPlace(object):
@@ -131,6 +197,9 @@ class PickPlace(object):
         self.limb = baxter_interface.Limb(limb)
         self.retreatdistance = 0.10
         self.gripper = baxter_interface.Gripper(limb)
+        self._ir_sensor = IRSensor()
+        while "right" not in self._ir_sensor.distance:
+            rospy.sleep(1)            
         self.verbose = True
         ns = "ExternalTools/" + limb + "/PositionKinematicsNode/IKService"
         self.iksvc = rospy.ServiceProxy(ns, SolvePositionIK)
@@ -148,6 +217,11 @@ class PickPlace(object):
         self.trash_loc_x = []
         self.trash_loc_y = []
         self.trash_loc_z = []
+        
+#        MoveBaxter.reset_cameras(MoveBaxter())
+##        MoveBaxter.close_camera(MoveBaxter(),"head")
+#        MoveBaxter.open_camera(MoveBaxter(),"right")
+#        MoveBaxter.subscribe_to_camera(MoveBaxter(),"right")
         
         
     def startPosition(self, limb):
@@ -187,6 +261,12 @@ class PickPlace(object):
         approach.orientation.w = 0.0
         joint_angles = TagsPose.checkValidPose(TagsPose(),approach)
         self.move_to_joint_position(joint_angles)
+        
+    def approachBag(self,pose):
+        aptrash= copy.deepcopy(pose)
+        aptrash.position.z = aptrash.position.z + self.retreatdistance
+        joint_angles = TagsPose.checkValidPose(TagsPose(), aptrash)
+        self.move_to_joint_position(joint_angles)
     
     def retract(self):
         current_pose = self.limb.endpoint_pose()
@@ -202,12 +282,12 @@ class PickPlace(object):
         self.move_to_joint_position(joint_angles)
     
     
-    def retract_from_trash(self):
+    def retract_from_bag(self):
         current_pose = self.limb.endpoint_pose()
         after_pose = Pose()
         after_pose.position.x = current_pose['position'].x
         after_pose.position.y = current_pose['position'].y
-        after_pose.position.z = current_pose['position'].z + 0.04
+        after_pose.position.z = current_pose['position'].z + 0.15
         after_pose.orientation.x = current_pose['orientation'].x
         after_pose.orientation.y = current_pose['orientation'].y
         after_pose.orientation.z = current_pose['orientation'].z
@@ -225,24 +305,34 @@ class PickPlace(object):
         joint_angles = TagsPose.checkValidPose(TagsPose(),tag)
         self.move_to_joint_position(joint_angles)
     
-    def servo_to_trash(self,pose):
+    def servo_to_bag(self,pose):
         descend = copy.deepcopy(pose)
-        descend.position.z = pose.position.z - 0.1
-        joint_angles = TagsPose.checkValidPose(TagsPose(), pose)
+        descend.position.z -= 0.2
+        joint_angles = TagsPose.checkValidPose(TagsPose(), descend)
         self.move_to_joint_position(joint_angles)
         
     def pick(self, pose):
         MoveBaxter.openGripper(MoveBaxter())
         self.approach(pose)
         self.servo_to_pose(pose)
+        if self._ir_sensor.distance.get("right") < 0.19 and self._ir_sensor.distance.get("right")>0.13 :
+            pose = copy.deepcopy(pose)
+            pose.position.z -= 0.015
+            self.servo_to_pose(pose)
         MoveBaxter.closeGripper(MoveBaxter())
+        print self.gripper.missed()
+        print self.gripper.position()
+        if self.gripper.missed()==False:
+            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/surprised.jpg')
+            self.retract()
+            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/sad.jpg')
         self.retract()
-        
+            
     def place(self,pose):
-        self.approach(pose)
-        self.servo_to_trash(pose)
+        self.approachBag(pose)
+        self.servo_to_bag(pose)
         MoveBaxter.openGripper(MoveBaxter())
-        self.retract_from_trash()
+        self.retract_from_bag()
         
     def load_gazebo_models(self, table_pose=Pose(position=Point(x=0.84, y=0.2, z=-0.55)),
                        table_reference_frame="base"):
@@ -306,41 +396,55 @@ class PickPlace(object):
 def main(args):
     rospy.init_node("pickandplaceikservice", anonymous=True)
     limb = "right"
+    MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/baxterhappy.jpg')
+    brs = IRSensor()
+    
 #    PickPlace.load_gazebo_models(PickPlace(limb))
 #    rospy.on_shutdown(PickPlace.delete_gazebo_models(PickPlace(limb)))
     x = 1
-    while x ==1: 
+    count = 0
+    while x ==1:
+        MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/baxterhappy.jpg')
         pnp = PickPlace(limb)
-        trash_loc_x = []
-        trash_loc_y = []
-        trash_loc_z = []
-        trashposes, baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
-        for key, val in trashposes.items():
-            val = trashposes[key]
-            trashloc = val.pose
-            trash_loc_x.append(trashloc.position.x)
-            trash_loc_y.append(trashloc.position.y)
-            trash_loc_z.append(trashloc.position.z)
-        for i in xrange(len(trash_loc_x)): 
+        item_loc_x = []
+        item_loc_y = []
+        item_loc_z = []
+        itemposes, baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
+        for key, val in itemposes.items():
+            val = itemposes[key]
+            itemloc = val.pose
+            item_loc_x.append(itemloc.position.x)
+            item_loc_y.append(itemloc.position.y)
+            item_loc_z.append(itemloc.position.z)
+        for i in xrange(len(item_loc_x)): 
             block_pose = Pose()
-            block_pose.position.x = trash_loc_x[i]
-            block_pose.position.y = trash_loc_y[i]
-            block_pose.position.z = trash_loc_z[i]
+            block_pose.position.x = item_loc_x[i]
+            block_pose.position.y = item_loc_y[i]
+            block_pose.position.z = item_loc_z[i]
             block_pose.orientation.x = 0.0
             block_pose.orientation.y = 0.0
             block_pose.orientation.z = 0.0
             block_pose.orientation.w = 1.0
-            block_reference_frame = "base"
             pnp.pick(block_pose)
-            trash_pose = Pose()
-            trash_pose.position.x = 0.85
-            trash_pose.position.y = -0.44
-            trash_pose.position.z = 0.38
-            trash_pose.orientation.x = 0.0968
-            trash_pose.orientation.y = 0.96
-            trash_pose.orientation.z = -0.06
-            trash_pose.orientation.w = 0.27
-            pnp.place(trash_pose)
+            item_pose = Pose()
+            if count > 5:
+                item_pose.position.x = 1.100
+                item_pose.position.y = -0.4
+                item_pose.position.z = 0.25
+                item_pose.orientation.x = 0.098
+                item_pose.orientation.y = 0.96
+                item_pose.orientation.z = -0.065
+                item_pose.orientation.w = 0.27
+            else:
+                item_pose.position.x = 0.85
+                item_pose.position.y = -0.44
+                item_pose.position.z = 0.28
+                item_pose.orientation.x = 0.0968
+                item_pose.orientation.y = 0.96
+                item_pose.orientation.z = -0.06
+                item_pose.orientation.w = 0.27
+            pnp.place(item_pose)
+            count+= 1
 
     try:
         rospy.spin()
