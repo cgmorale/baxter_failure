@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import sys
 import struct
-#import numpy as np
 import rospkg
 import rospy
 import baxter_interface
@@ -20,6 +19,8 @@ from gazebo_msgs.srv import SpawnModel, DeleteModel
 import cv2
 import cv_bridge
 import std_srvs.srv
+import threading
+
 
 class TagsPose(object):
     def __init__(self):
@@ -51,9 +52,11 @@ class TagsPose(object):
         self.newPose= t.transformPose('base',ids)
         # change the orientation (quaternions) of april tags so that the IK can work
         # need to change it so Baxter knows were to grab the tags from
-        self.newPose.pose.position.x +=0.04
-        self.newPose.pose.position.y +=0.055
-        self.newPose.pose.position.z -= 0.01
+        print self.newPose.pose
+        self.newPose.pose.position.x -=0.03
+        self.newPose.pose.position.y +=0.04
+#        self.newPose.pose.position.z -= 0.01
+        self.newPose.pose.position.z = -0.155
         self.newPose.pose.orientation.x = 0
         self.newPose.pose.orientation.y = 1.0
         self.newPose.pose.orientation.z = 0
@@ -145,8 +148,6 @@ class MoveBaxter(object):
         pub.publish(msg)
         # Sleep to allow for image to be published.
         rospy.sleep(1)
-    
-            
     
   
     def open_camera(self, camera):
@@ -282,12 +283,13 @@ class PickPlace(object):
         self.move_to_joint_position(joint_angles)
     
     
+    
     def retract_from_bag(self):
         current_pose = self.limb.endpoint_pose()
         after_pose = Pose()
         after_pose.position.x = current_pose['position'].x
         after_pose.position.y = current_pose['position'].y
-        after_pose.position.z = current_pose['position'].z + 0.15
+        after_pose.position.z = current_pose['position'].z + 0.20
         after_pose.orientation.x = current_pose['orientation'].x
         after_pose.orientation.y = current_pose['orientation'].y
         after_pose.orientation.z = current_pose['orientation'].z
@@ -315,18 +317,53 @@ class PickPlace(object):
         MoveBaxter.openGripper(MoveBaxter())
         self.approach(pose)
         self.servo_to_pose(pose)
-        if self._ir_sensor.distance.get("right") < 0.19 and self._ir_sensor.distance.get("right")>0.13 :
+        if self._ir_sensor.distance.get("right") < 0.17 and self._ir_sensor.distance.get("right")>0.13 :
             pose = copy.deepcopy(pose)
             pose.position.z -= 0.015
             self.servo_to_pose(pose)
         MoveBaxter.closeGripper(MoveBaxter())
-        print self.gripper.missed()
-        print self.gripper.position()
-        if self.gripper.missed()==False:
+        rospy.sleep(2.0)
+        if self.gripper.position()<5.0:
             MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/surprised.jpg')
             self.retract()
             MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/sad.jpg')
         self.retract()
+    
+    def picktothrow(self,pose):
+        MoveBaxter.openGripper(MoveBaxter())
+        self.approach(pose)
+        self.servo_to_pose(pose)
+        if self._ir_sensor.distance.get("right") < 0.17 and self._ir_sensor.distance.get("right")>0.13 :
+            pose = copy.deepcopy(pose)
+            pose.position.z -= 0.015
+            self.servo_to_pose(pose)
+        MoveBaxter.closeGripper(MoveBaxter())
+        rospy.sleep(2.0)
+        if self.gripper.position()>5.0:
+            self.retract()
+            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/angry.jpg')
+            self.openGripperToThrow()
+        
+    def movetoend(self):
+        limb=baxter_interface.Limb("right")
+        limb.set_joint_position_speed(0.8)
+        endAngles = {'right_w0':-0.85,
+                       'right_w1':0.26,
+                       'right_w2':0.76,
+                       'right_e0':0.436,
+                       'right_e1':0.388,
+                       'right_s0':0.708,
+                       'right_s1':-0.622}
+        limb.move_to_joint_positions(endAngles)
+    
+    def openg(self):
+        rospy.sleep(1.8)
+        self.gripper.command_position(position=100.0, block =False)
+        self.gripper.open()
+        
+    def openGripperToThrow(self):
+        threading.Thread(target= self.movetoend).start()
+        threading.Thread(target= self.openg).start()
             
     def place(self,pose):
         self.approachBag(pose)
@@ -401,56 +438,123 @@ def main(args):
     
 #    PickPlace.load_gazebo_models(PickPlace(limb))
 #    rospy.on_shutdown(PickPlace.delete_gazebo_models(PickPlace(limb)))
-    x = 1
-    count = 0
-    while x ==1:
-        MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/baxterhappy.jpg')
-        pnp = PickPlace(limb)
-        item_loc_x = []
-        item_loc_y = []
-        item_loc_z = []
-        itemposes, baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
-        for key, val in itemposes.items():
-            val = itemposes[key]
-            itemloc = val.pose
-            item_loc_x.append(itemloc.position.x)
-            item_loc_y.append(itemloc.position.y)
-            item_loc_z.append(itemloc.position.z)
-        for i in xrange(len(item_loc_x)): 
-            block_pose = Pose()
-            block_pose.position.x = item_loc_x[i]
-            block_pose.position.y = item_loc_y[i]
-            block_pose.position.z = item_loc_z[i]
-            block_pose.orientation.x = 0.0
-            block_pose.orientation.y = 0.0
-            block_pose.orientation.z = 0.0
-            block_pose.orientation.w = 1.0
-            pnp.pick(block_pose)
-            item_pose = Pose()
-            if count > 5:
-                item_pose.position.x = 1.100
-                item_pose.position.y = -0.4
-                item_pose.position.z = 0.25
-                item_pose.orientation.x = 0.098
-                item_pose.orientation.y = 0.96
-                item_pose.orientation.z = -0.065
-                item_pose.orientation.w = 0.27
-            else:
-                item_pose.position.x = 0.85
-                item_pose.position.y = -0.44
-                item_pose.position.z = 0.28
-                item_pose.orientation.x = 0.0968
-                item_pose.orientation.y = 0.96
-                item_pose.orientation.z = -0.06
-                item_pose.orientation.w = 0.27
-            pnp.place(item_pose)
-            count+= 1
-
-    try:
-        rospy.spin()
-    except KeyboardInterrupt:
-        print("Shutting down")
-
+    number = input("choose state:")
+    if number ==1:
+        x = 1
+        count = 0
+        while x ==1:
+            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/baxterhappy.jpg')
+            pnp = PickPlace(limb)
+            item_loc_x = []
+            item_loc_y = []
+            item_loc_z = []
+            itemposes, baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
+            for key, val in itemposes.items():
+                val = itemposes[key]
+                itemloc = val.pose
+                item_loc_x.append(itemloc.position.x)
+                item_loc_y.append(itemloc.position.y)
+                item_loc_z.append(itemloc.position.z)
+            for i in xrange(len(item_loc_x)): 
+                block_pose = Pose()
+                block_pose.position.x = item_loc_x[i]
+                block_pose.position.y = item_loc_y[i]
+                block_pose.position.z = item_loc_z[i]
+                block_pose.orientation.x = 0.0
+                block_pose.orientation.y = 0.0
+                block_pose.orientation.z = 0.0
+                block_pose.orientation.w = 1.0               
+                pnp.pick(block_pose)
+                item_pose = Pose()
+                if count > 5:
+                    item_pose.position.x = 1.100
+                    item_pose.position.y = -0.4
+                    item_pose.position.z = 0.25
+                    item_pose.orientation.x = 0.098
+                    item_pose.orientation.y = 0.96
+                    item_pose.orientation.z = -0.065
+                    item_pose.orientation.w = 0.27
+                else:
+                    item_pose.position.x = 0.85
+                    item_pose.position.y = -0.44
+                    item_pose.position.z = 0.28
+                    item_pose.orientation.x = 0.0968
+                    item_pose.orientation.y = 0.96
+                    item_pose.orientation.z = -0.06
+                    item_pose.orientation.w = 0.27
+                pnp.place(item_pose)
+                count+= 1
+    
+        try:
+            rospy.spin()
+        except KeyboardInterrupt:
+            print("Shutting down")
+    
+    elif number ==2:
+        x = 1
+        count = 0
+        while x ==1:
+            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/baxterhappy.jpg')
+            pnp = PickPlace(limb)
+            item_loc_x = []
+            item_loc_y = []
+            item_loc_z = []
+            itemposes, baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
+            for key, val in itemposes.items():
+                if key == 16:
+                    val16 = itemposes[key]
+                    throwobj = val16.pose
+                    throw_object = Pose()
+                    throw_object.position.x = throwobj.position.x
+                    throw_object.position.y = throwobj.position.y
+                    throw_object.position.z = throwobj.position.z
+                    throw_object.orientation.x = 0.0
+                    throw_object.orientation.y = 0.0
+                    throw_object.orientation.z = 0.0
+                    throw_object.orientation.w = 1.0
+                    pnp.picktothrow(throw_object)
+                else: 
+                    val = itemposes[key]
+                    itemloc = val.pose
+                    item_loc_x.append(itemloc.position.x)
+                    item_loc_y.append(itemloc.position.y)
+                    item_loc_z.append(itemloc.position.z)
+            for i in xrange(len(item_loc_x)): 
+                block_pose = Pose()
+                block_pose.position.x = item_loc_x[i]
+                block_pose.position.y = item_loc_y[i]
+                block_pose.position.z = item_loc_z[i]
+                block_pose.orientation.x = 0.0
+                block_pose.orientation.y = 0.0
+                block_pose.orientation.z = 0.0
+                block_pose.orientation.w = 1.0
+                pnp.pick(block_pose)
+                item_pose = Pose()
+                if count > 5:
+                    item_pose.position.x = 1.100
+                    item_pose.position.y = -0.4
+                    item_pose.position.z = 0.25
+                    item_pose.orientation.x = 0.098
+                    item_pose.orientation.y = 0.96
+                    item_pose.orientation.z = -0.065
+                    item_pose.orientation.w = 0.27
+                else:
+                    item_pose.position.x = 0.85
+                    item_pose.position.y = -0.44
+                    item_pose.position.z = 0.28
+                    item_pose.orientation.x = 0.0968
+                    item_pose.orientation.y = 0.96
+                    item_pose.orientation.z = -0.06
+                    item_pose.orientation.w = 0.27
+                pnp.place(item_pose)
+                count+= 1
+    
+        try:
+            rospy.spin()
+        except KeyboardInterrupt:
+            print("Shutting down")
+    else:
+        print "try again"
 
 if __name__ == '__main__':
     main(sys.argv)
