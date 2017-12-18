@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 import sys
 import struct
-import rospkg
 import rospy
 import baxter_interface
 from lab_ros_perception.AprilTagModule import AprilTagModule
 from sensor_msgs.msg import Range, Image
-from geometry_msgs.msg import PoseStamped,Pose, Point
+from geometry_msgs.msg import PoseStamped,Pose
 from std_msgs.msg import Header
 import time
 import copy
@@ -15,10 +14,8 @@ from baxter_core_msgs.srv import (
     SolvePositionIK,
     SolvePositionIKRequest,
 )
-from gazebo_msgs.srv import SpawnModel, DeleteModel
 import cv2
 import cv_bridge
-import std_srvs.srv
 import threading
 from lab_polly_speech import PollySpeech
 
@@ -38,26 +35,23 @@ class TagsPose(object):
         ns = "ExternalTools/" + "right" + "/PositionKinematicsNode/IKService"
         self.iksvc = rospy.ServiceProxy(ns, SolvePositionIK)
         self.verbose = True
-        
+
     def getDictofPoses(self):
         while True:
             """
-            set stamped = 1 to return the LAST stamped pose of all seen IDs 
-            set stamped = 0 to return the updated version of the pose (it refreshes every 5 seconds). 
+            set stamped = 1 to return the LAST stamped pose of all seen IDs
+            set stamped = 0 to return the updated version of the pose (it refreshes every 5 seconds).
             """
             self.poses = self.tag_module.getPosesForSeenIDs(stamped =0)
             if self.poses != {}:
                 return self.poses
-            
+
     def transform_pose(self, ids,t):
-#        rospy.sleep(3.0)
         self.newPose= t.transformPose('base',ids)
         # change the orientation (quaternions) of april tags so that the IK can work
         # need to change it so Baxter knows were to grab the tags from
-        print self.newPose.pose
-        self.newPose.pose.position.x -=0.05
-        self.newPose.pose.position.y +=0.04
-#        self.newPose.pose.position.z -= 0.01
+        self.newPose.pose.position.x -=0.064
+        self.newPose.pose.position.y +=0.046
         self.newPose.pose.position.z = -0.155
         self.newPose.pose.orientation.x = 0
         self.newPose.pose.orientation.y = 1.0
@@ -94,7 +88,7 @@ class TagsPose(object):
             print("Invalid Pose - No valid joint solution found.")
             return False
         return limb_joints
-        
+
     def makeDictofTransformedPoses(self):
         dictOfOldPoses = self.getDictofPoses()
         self.transformedDict = {}
@@ -105,7 +99,8 @@ class TagsPose(object):
             if validTransformed != False:
                 self.jointAngles[key] = validTransformed
                 self.transformedDict[key] = transformed
-        return self.transformedDict , self.jointAngles 
+        return self.transformedDict , self.jointAngles
+
 
 class IRSensor(object):
     def __init__(self):
@@ -113,11 +108,11 @@ class IRSensor(object):
         root_name = "/robot/range/"
         sensor_name = "right_hand_range/state"
         self._right_sensor = rospy.Subscriber(root_name + sensor_name, Range, callback = self._sensorCallback,callback_args = 'right', queue_size = 1)
-        
+
     def _sensorCallback(self,msg, side):
-        
         self.distance[side] = msg.range
         rangeofIR = self.distance.get('right')
+        return rangeofIR #if something stops working delete this
 
 class MoveBaxter(object):
     def __init__(self):
@@ -126,23 +121,23 @@ class MoveBaxter(object):
         self.angles = self.limb.joint_angles()
 
     def calibrateGripper(self):
-        #calibrate gripper and close it 
+        #calibrate gripper and close it
         self.gripper.calibrate(block=True, timeout=5.0)
         self.gripper.command_position(position=100.0, block =True, timeout=5.0)
         return
 
-    def openGripper(self): 
+    def openGripper(self):
         #opens the gripper
         self.gripper.command_position(position=100.0, block =True,timeout=5.0)
-        self.gripper.open() 
+        self.gripper.open()
         return
-    
+
     def closeGripper(self):
         #closes the gripper
         self.gripper.command_position(position=100.0, block =True,timeout=5.0)
         self.gripper.close()
         return
-        
+
     def changeBaxterFace(self, path):
         img = cv2.imread(path)
         msg = cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="bgr8")
@@ -150,59 +145,39 @@ class MoveBaxter(object):
         pub.publish(msg)
         # Sleep to allow for image to be published.
         rospy.sleep(1)
-    
-  
-    def open_camera(self, camera):
-        if camera== "right":
-            cam = baxter_interface.camera.CameraController("right_hand_camera")
-        elif camera== "head":
-            cam = baxter_interface.camera.CameraController("head_camera")
+
+    def priceofitems(self,key):
+        sp = PollySpeech()
+        cerealboxes = [4,5,6,7,8,9]
+        littlecan = [12,13,14,15]
+        bigcan = [10,11]
+        banana = [17]
+        tomato = [18]
+        potato = [16]
+        if key in cerealboxes:
+            sp.speak("Cereal box is one dollar and thirty four cents.")
+        elif key in littlecan:
+            sp.speak("Cherries are one dollar and fifty seven cents.")
+        elif key in bigcan:
+            sp.speak("Tomato soup is two dollars ten cents." )
+        elif key in banana:
+            sp.speak("Banana is nineteen cents.")
+        elif key in tomato:
+            sp.speak("Tomato is three dollars.")
+        elif key in potato:
+            sp.speak("Potato is sixty three cents.")
         else:
-            sys.exit("Error - invalid camera")
-        cam.open()
-        rospy.sleep(1.0)
-        
-    def close_camera(self, camera):
-        if camera== "right":
-            cam = baxter_interface.camera.CameraController("right_hand_camera")
-        elif camera== "head":
-            cam = baxter_interface.camera.CameraController("head_camera")
-        else:
-            sys.exit("Error - invalid camera")
-        cam.close()
-        rospy.sleep(1.0)
-        
-    def camera_callback(self, data, camera_name):
-        try:
-            self.cv_image= cv_bridge.CvBridge().imgmsg_to_cv2(data,"bgr8")
-        except cv_bridge.CvBridgeError,e:
-            print e
-    
-    def right_camera_callback(self, data):
-        self.camera_callback(data, "Right Hand Camera")
-    
-    def subscribe_to_camera(self,camera):
-        if camera =="right":
-            callback = self.right_camera_callback
-            camera_str = "/cameras/right_hand_camera/image"
-        else:
-            sys.exit("Error- subscribe to camera is invalid")
-        camera_sub =rospy.Subscriber(camera_str, Image, camera_callback)
-        
-    def reset_cameras(self):
-        reset_srv = rospy.ServiceProxy('cameras/reset',std_srvs.srv.Empty)
-        rospy.wait_for_service('cameras/reset',timeout = 10)
-        reset_srv()
-        
+            sp.speak("Item is one dollar.")
 
 class PickPlace(object):
     def __init__(self):
+        global mB
         self.limb = baxter_interface.Limb("right")
         self.retreatdistance = 0.10
         self.gripper = baxter_interface.Gripper("right")
         self._ir_sensor = IRSensor()
         while "right" not in self._ir_sensor.distance:
-            rospy.sleep(1)            
+            rospy.sleep(1)
         self.verbose = True
         ns = "ExternalTools/" + "right" + "/PositionKinematicsNode/IKService"
         self.iksvc = rospy.ServiceProxy(ns, SolvePositionIK)
@@ -216,18 +191,9 @@ class PickPlace(object):
         self.init_state = self.rs.state().enabled
         print ("Robot is being enabled")
         self.rs.enable()
-        MoveBaxter.calibrateGripper(MoveBaxter())
-        self.trash_loc_x = []
-        self.trash_loc_y = []
-        self.trash_loc_z = []
-        
-#        MoveBaxter.reset_cameras(MoveBaxter())
-##        MoveBaxter.close_camera(MoveBaxter(),"head")
-#        MoveBaxter.open_camera(MoveBaxter(),"right")
-#        MoveBaxter.subscribe_to_camera(MoveBaxter(),"right")
-        
-        
+
     def startPosition(self):
+        global mB
         self.startAngles = {'right_w0':-0.67,
                             'right_w1':1.03,
                             'right_w2':0.5,
@@ -237,16 +203,16 @@ class PickPlace(object):
                             'right_s1':-1.0}
         print ("Moving arm to starting position..")
         self.move_to_joint_position(self.startAngles)
-        MoveBaxter.openGripper(MoveBaxter())
+        mB.openGripper()
         rospy.sleep(1.0)
-    
+
     def move_to_joint_position(self, joint_angles):
         if joint_angles:
-            self.limb.set_joint_position_speed(0.6)
+            self.limb.set_joint_position_speed(1.0)
             self.limb.move_to_joint_positions(joint_angles)
         else:
             print("No joint angles provided")
-    
+
     def approach(self, pose):
         approach = copy.deepcopy(pose)
         approach.position.z = approach.position.z + self.retreatdistance
@@ -256,28 +222,28 @@ class PickPlace(object):
         approach.orientation.w = 0.0
         joint_angles = TagsPose.checkValidPose(TagsPose(),approach)
         self.move_to_joint_position(joint_angles)
-        
+
     def approachBag(self,pose):
         aptrash= copy.deepcopy(pose)
         aptrash.position.z = aptrash.position.z + self.retreatdistance
         joint_angles = TagsPose.checkValidPose(TagsPose(), aptrash)
         self.move_to_joint_position(joint_angles)
-    
+
     def retract(self):
         current_pose = self.limb.endpoint_pose()
         ik_pose= Pose()
         ik_pose.position.x = current_pose['position'].x
         ik_pose.position.y = current_pose['position'].y
         ik_pose.position.z = current_pose['position'].z + self.retreatdistance
-        ik_pose.orientation.x = current_pose['orientation'].x 
+        ik_pose.orientation.x = current_pose['orientation'].x
         ik_pose.orientation.y = current_pose['orientation'].y
         ik_pose.orientation.z = current_pose['orientation'].z
         ik_pose.orientation.w = current_pose['orientation'].w
         joint_angles = TagsPose.checkValidPose(TagsPose(),ik_pose)
         self.move_to_joint_position(joint_angles)
-    
-    
-    
+
+
+
     def retract_from_bag(self):
         current_pose = self.limb.endpoint_pose()
         after_pose = Pose()
@@ -290,8 +256,8 @@ class PickPlace(object):
         after_pose.orientation.w = current_pose['orientation'].w
         joint_angles = TagsPose.checkValidPose(TagsPose(),after_pose)
         self.move_to_joint_position(joint_angles)
-        
-        
+
+
     def servo_to_pose(self, pose):
         tag = copy.deepcopy(pose)
         tag.orientation.x = 0
@@ -300,80 +266,84 @@ class PickPlace(object):
         tag.orientation.w = 0.0
         joint_angles = TagsPose.checkValidPose(TagsPose(),tag)
         self.move_to_joint_position(joint_angles)
-    
+
     def servo_to_bag(self,pose):
         descend = copy.deepcopy(pose)
         descend.position.z -= 0.2
         joint_angles = TagsPose.checkValidPose(TagsPose(), descend)
         self.move_to_joint_position(joint_angles)
-        
+
     def pick(self, pose):
+        global mB
         pickObject = True
-        MoveBaxter.openGripper(MoveBaxter())
+        mB.openGripper()
         self.approach(pose)
         self.servo_to_pose(pose)
-        if self._ir_sensor.distance.get("right") < 0.17 and self._ir_sensor.distance.get("right")>0.13 :
+        if self._ir_sensor.distance.get("right") < 0.17 and self._ir_sensor.distance.get("right")>0.128 :
             pose = copy.deepcopy(pose)
             pose.position.z -= 0.015
             self.servo_to_pose(pose)
-        MoveBaxter.closeGripper(MoveBaxter())
+        mB.closeGripper()
         rospy.sleep(2.0)
         if self.gripper.position()<5.0:
-            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/surprised.jpg')
+            mB.changeBaxterFace('/home/lab/Pictures/surprised.jpg')
             self.retract()
-            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/sad.jpg')
+            mB.changeBaxterFace('/home/lab/Pictures/sad.jpg')
             pickObject= False
         self.retract()
         return pickObject
-        
+
     def pickToSqueeze(self, pose):
+        global mB
         pickObject = True
-        MoveBaxter.openGripper(MoveBaxter())
+        mB.openGripper()
         self.approach(pose)
         self.servo_to_pose(pose)
-        if self._ir_sensor.distance.get("right") < 0.17 and self._ir_sensor.distance.get("right")>0.13 :
+        if self._ir_sensor.distance.get("right") < 0.17 and self._ir_sensor.distance.get("right")>0.128 :
             pose = copy.deepcopy(pose)
             pose.position.z -= 0.015
             self.servo_to_pose(pose)
         self.gripper.command_position(5, block=False, timeout= 5.0)
         rospy.sleep(2.0)
         if self.gripper.position()<5.0:
-            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/surprised.jpg')
+            mB.changeBaxterFace('/home/lab/Pictures/surprised.jpg')
             self.retract()
-            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/sad.jpg')
+            mB.changeBaxterFace('/home/lab/Pictures/sad.jpg')
             pickObject= False
         self.retract()
         return pickObject
-    
+
     def picktothrow(self,pose):
-        MoveBaxter.openGripper(MoveBaxter())
+        global mB
+        mB.openGripper()
         self.approach(pose)
         self.servo_to_pose(pose)
         if self._ir_sensor.distance.get("right") < 0.17 and self._ir_sensor.distance.get("right")>0.13 :
             pose = copy.deepcopy(pose)
             pose.position.z -= 0.015
             self.servo_to_pose(pose)
-        MoveBaxter.closeGripper(MoveBaxter())
+        mB.closeGripper()
         rospy.sleep(2.0)
         if self.gripper.position()>5.0:
             self.retract()
-            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/angryred.jpg')
+            mB.changeBaxterFace('/home/lab/Pictures/angryred.jpg')
             self.openGripperToThrow()
-            
+
     def picktoMisplace(self, pose):
-        MoveBaxter.openGripper(MoveBaxter())
+        global mB
+        mB.openGripper()
         self.approach(pose)
         self.servo_to_pose(pose)
         if self._ir_sensor.distance.get("right") < 0.17 and self._ir_sensor.distance.get("right")>0.13 :
             pose = copy.deepcopy(pose)
             pose.position.z -= 0.015
             self.servo_to_pose(pose)
-        MoveBaxter.closeGripper(MoveBaxter())
+        mB.closeGripper()
         rospy.sleep(2.0)
         if self.gripper.position()<5.0:
-            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/surprised.jpg')
+            mB.changeBaxterFace('/home/lab/Pictures/surprised.jpg')
             self.retract()
-            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/sad.jpg')
+            mB.changeBaxterFace('/home/lab/Pictures/sad.jpg')
         self.retract()
         item_pose = Pose()
         item_pose.position.x = 1.100
@@ -394,8 +364,8 @@ class PickPlace(object):
                        'right_s0':0.324,
                        'right_s1':-0.574}
         limb.move_to_joint_positions(endAngles)
-        MoveBaxter.openGripper(MoveBaxter())
-        
+        mB.openGripper()
+
     def movetoend(self):
         limb=baxter_interface.Limb("right")
         limb.set_joint_position_speed(1.0)
@@ -407,106 +377,119 @@ class PickPlace(object):
                        'right_s0':0.708,
                        'right_s1':-0.622}
         limb.move_to_joint_positions(endAngles)
-    
+
     def openg(self):
         rospy.sleep(1.5)
         self.gripper.command_position(position=100.0, block =False)
         self.gripper.open()
-        
+
     def openGripperToThrow(self):
         threading.Thread(target= self.movetoend).start()
         threading.Thread(target= self.openg).start()
-    
+
     def crazyMoves(self, pose):
-        MoveBaxter.openGripper(MoveBaxter())
+        global mB
+        mB.openGripper()
         self.approach(pose)
         self.servo_to_pose(pose)
         if self._ir_sensor.distance.get("right") < 0.17 and self._ir_sensor.distance.get("right")>0.13 :
             pose = copy.deepcopy(pose)
             pose.position.z -= 0.015
             self.servo_to_pose(pose)
-        MoveBaxter.closeGripper(MoveBaxter())
+        mB.closeGripper()
         rospy.sleep(2.0)
         if self.gripper.position()>5.0:
             self.retract()
-            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/angryred.jpg')
+            mB.changeBaxterFace('/home/lab/Pictures/angryred.jpg')
         self.approachBag(pose)
         rospy.sleep(0.5)
+        x = 1
         limb=baxter_interface.Limb("right")
         limb.set_joint_position_speed(1.0)
-        firstAngles = {'right_w0':-0.78,
-                       'right_w1':0.31,
-                       'right_w2':0.74,
-                       'right_e0':0.43,
-                       'right_e1':0.79,
-                       'right_s0':0.36,
-                       'right_s1':-0.75}
-        limb.move_to_joint_positions(firstAngles)
-        secondAngles = {'right_w0':-0.76,
-                       'right_w1':-0.02,
-                       'right_w2':0.93,
-                       'right_e0':-0.27,
-                       'right_e1':0.80,
-                       'right_s0':0.64,
-                       'right_s1':-0.65}
-        limb.move_to_joint_positions(secondAngles)
-        rospy.sleep(1.0)
-        thirdAngles = {'right_w0':-0.76,
-                       'right_w1':-0.11,
-                       'right_w2':1.10,
-                       'right_e0':-0.54,
-                       'right_e1':0.57,
-                       'right_s0':1.45,
-                       'right_s1':-0.42}
-        limb.move_to_joint_positions(thirdAngles)
-        rospy.sleep(1.0)
-        fourthAngles = {'right_w0':-0.67,
-                       'right_w1':1.03,
-                       'right_w2':0.50,
-                       'right_e0':1.18,
-                       'right_e1':1.93,
-                       'right_s0':0.08,
-                       'right_s1':-0.99}
-        limb.move_to_joint_positions(fourthAngles)
-        rospy.sleep(1.0)
-        MoveBaxter.openGripper(MoveBaxter())
-        
+        rate = rospy.Rate(1000)
+        start_time = time.time()
+        while x ==1:
+            if time.time() - start_time < 0.5:
+                firstAngles = {'right_w0':-0.816,
+                           'right_w1':0.357,
+                           'right_w2':0.744,
+                           'right_e0':0.211,
+                           'right_e1':0.85,
+                           'right_s0':0.530,
+                           'right_s1':-0.734}
+                limb.set_joint_positions(firstAngles)
+            if time.time() -start_time > 0.5 and time.time() - start_time > 3:
+                secondAngles = {'right_w0':-0.83,
+                           'right_w1':-0.0314,
+                           'right_w2':0.849,
+                           'right_e0':-0.112,
+                           'right_e1':0.677,
+                           'right_s0':1.219,
+                           'right_s1':-0.667}
+                limb.set_joint_positions(secondAngles)
+            if time.time() - start_time >3 and time.time() - start_time<8:
+                thirdAngles = {'right_w0':-0.67,
+                           'right_w1':1.017,
+                           'right_w2':0.504,
+                           'right_e0':1.176,
+                           'right_e1':1.926,
+                           'right_s0':0.0913,
+                           'right_s1':-0.997}
+                limb.set_joint_positions(thirdAngles)
+                x=2
+#            if time.time()- start_time > 15.0: 
+#                fourthAngles = {'right_w0':0.69,
+#                           'right_w1':-1.530,
+#                           'right_w2':0.691,
+#                           'right_e0':-0.351,
+#                           'right_e1':-0.049,
+#                           'right_s0':0.43,
+#                           'right_s1':-0.634}
+#                limb.set_joint_positions(fourthAngles)
+#                x =2 
+            rate.sleep()
+        mB.openGripper()
+
     def place(self,pose):
+        global mB
         self.approachBag(pose)
         self.servo_to_bag(pose)
-        MoveBaxter.openGripper(MoveBaxter())
+        mB.openGripper()
         self.retract_from_bag()
-        
+        PickPlace.startPosition(PickPlace())
 
-        
+mB = None
+
 def main(args):
+    global mB
     rospy.init_node("pickandplaceikservice", anonymous=True)
+    mB = MoveBaxter()
     rightl = baxter_interface.Limb('right')
-    rightl.set_joint_position_speed(0.6)
-    MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/baxterhappy.jpg')
-    brs = IRSensor()
+    rightl.set_joint_position_speed(1.0)
+    mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
     sp = PollySpeech()
     sp.speak("Hello, how are you doing today? Did you find everything you were looking for?",block=False)
+    mB.calibrateGripper()
 
-    
     number = input("choose state:")
     if number ==1:
         x = 1
         count = 0
         while x ==1:
-            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/baxterhappy.jpg')
+            mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
             pnp = PickPlace()
             item_loc_x = []
             item_loc_y = []
             item_loc_z = []
             itemposes, baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
             for key, val in itemposes.items():
+                mB.priceofitems(key)
                 val = itemposes[key]
                 itemloc = val.pose
                 item_loc_x.append(itemloc.position.x)
                 item_loc_y.append(itemloc.position.y)
                 item_loc_z.append(itemloc.position.z)
-            for i in xrange(len(item_loc_x)): 
+            for i in xrange(len(item_loc_x)):
                 block_pose = Pose()
                 block_pose.position.x = item_loc_x[i]
                 block_pose.position.y = item_loc_y[i]
@@ -514,7 +497,7 @@ def main(args):
                 block_pose.orientation.x = 0.0
                 block_pose.orientation.y = 0.0
                 block_pose.orientation.z = 0.0
-                block_pose.orientation.w = 1.0               
+                block_pose.orientation.w = 1.0
                 if (pnp.pick(block_pose)) == True:
                     item_pose = Pose()
                     if count > 5:
@@ -537,23 +520,23 @@ def main(args):
                 else:
                     PickPlace.startPosition(PickPlace())
                 count+= 1
-    
         try:
             rospy.spin()
         except KeyboardInterrupt:
             print("Shutting down")
-    
+
     elif number ==2:
         x = 1
         count = 0
         while x ==1:
-            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/baxterhappy.jpg')
+            mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
             pnp = PickPlace()
             item_loc_x = []
             item_loc_y = []
             item_loc_z = []
             itemposes, baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
             for key, val in itemposes.items():
+                mB.priceofitems(key)
                 if key == 16:
                     val16 = itemposes[key]
                     throwobj = val16.pose
@@ -605,7 +588,7 @@ def main(args):
                     othermiss.orientation.w = 1.0
                     pnp.pickToSqueeze(othermiss)
                     thirdmiss = Pose()
-                    thirdmiss.position.x = missobj.position.x +0.03
+                    thirdmiss.position.x = missobj.position.x +0.04
                     thirdmiss.position.y = missobj.position.y
                     thirdmiss.position.z = missobj.position.z
                     thirdmiss.orientation.x = 0.0
@@ -622,7 +605,7 @@ def main(args):
                     fourth.orientation.z = 0.0
                     fourth.orientation.w = 1.0
                     pnp.pick(fourth)
-                    MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/baxterhappy.jpg')
+                    mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
                     itempos = Pose()
                     itempos.position.x = 0.85
                     itempos.position.y = -0.44
@@ -669,15 +652,15 @@ def main(args):
                     item_pose.orientation.z = -0.013
                     item_pose.orientation.w = 0.134
                     pnp.place(item_pose)
-                    
+
                 else:
                     val = itemposes[key]
                     itemloc = val.pose
                     item_loc_x.append(itemloc.position.x)
                     item_loc_y.append(itemloc.position.y)
                     item_loc_z.append(itemloc.position.z)
-            MoveBaxter.changeBaxterFace(MoveBaxter(),'/home/lab/Pictures/baxterhappy.jpg')
-            for i in xrange(len(item_loc_x)): 
+            mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
+            for i in xrange(len(item_loc_x)):
                 block_pose = Pose()
                 block_pose.position.x = item_loc_x[i]
                 block_pose.position.y = item_loc_y[i]
@@ -706,7 +689,7 @@ def main(args):
                     item_pose.orientation.w = 0.27
                 pnp.place(item_pose)
                 count+= 1
-    
+
         try:
             rospy.spin()
         except KeyboardInterrupt:
