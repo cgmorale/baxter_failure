@@ -50,8 +50,8 @@ class TagsPose(object):
         self.newPose= t.transformPose('base',ids)
         # change the orientation (quaternions) of april tags so that the IK can work
         # need to change it so Baxter knows were to grab the tags from
-        self.newPose.pose.position.x -=0.064
-        self.newPose.pose.position.y +=0.046
+        self.newPose.pose.position.x -=0.073 #0.069 
+        self.newPose.pose.position.y +=0.061 #0.046
         self.newPose.pose.position.z = -0.155
         self.newPose.pose.orientation.x = 0
         self.newPose.pose.orientation.y = 1.0
@@ -369,14 +369,31 @@ class PickPlace(object):
     def movetoend(self):
         limb=baxter_interface.Limb("right")
         limb.set_joint_position_speed(1.0)
-        endAngles = {'right_w0':-0.85,
-                       'right_w1':0.26,
-                       'right_w2':0.76,
-                       'right_e0':0.436,
-                       'right_e1':0.388,
-                       'right_s0':0.708,
-                       'right_s1':-0.622}
-        limb.move_to_joint_positions(endAngles)
+        limb.set_joint_velocities(dict({ 'right_w1':3.0,'right_e1':2.0}))
+#        endAngles = {'right_w0':-0.52,
+#                       'right_w1':-1.3,
+#                       'right_w2':0.50,
+#                       'right_e0':0.436,
+#                       'right_e1':0.67,
+#                       'right_s0':0.708,
+#                       'right_s1':-0.622}
+#        limb.move_to_joint_positions(endAngles)
+        x= 1
+        rate = rospy.Rate(1000)
+        start_time = time.time()
+        while x ==1:
+            if time.time() - start_time < 2:
+                endAngles = {'right_w0':-0.34,
+                           'right_w1':-0.85,
+                           'right_w2':0.203,
+                           'right_e0':-0.00767,
+                           'right_e1':0.0387,
+                           'right_s0':0.812,
+                           'right_s1':-0.523}
+                limb.set_joint_positions(endAngles)
+            if time.time() - start_time > 4: 
+                x =2 
+        rate.sleep()
 
     def openg(self):
         rospy.sleep(1.5)
@@ -409,7 +426,7 @@ class PickPlace(object):
         rate = rospy.Rate(1000)
         start_time = time.time()
         while x ==1:
-            if time.time() - start_time < 0.5:
+            if time.time() - start_time < 2:
                 firstAngles = {'right_w0':-0.816,
                            'right_w1':0.357,
                            'right_w2':0.744,
@@ -418,7 +435,7 @@ class PickPlace(object):
                            'right_s0':0.530,
                            'right_s1':-0.734}
                 limb.set_joint_positions(firstAngles)
-            if time.time() -start_time > 0.5 and time.time() - start_time > 3:
+            if time.time() -start_time > 2 and time.time() - start_time < 5:
                 secondAngles = {'right_w0':-0.83,
                            'right_w1':-0.0314,
                            'right_w2':0.849,
@@ -427,7 +444,7 @@ class PickPlace(object):
                            'right_s0':1.219,
                            'right_s1':-0.667}
                 limb.set_joint_positions(secondAngles)
-            if time.time() - start_time >3 and time.time() - start_time<8:
+            if time.time() - start_time >5 and time.time() - start_time<8:
                 thirdAngles = {'right_w0':-0.67,
                            'right_w1':1.017,
                            'right_w2':0.504,
@@ -436,18 +453,27 @@ class PickPlace(object):
                            'right_s0':0.0913,
                            'right_s1':-0.997}
                 limb.set_joint_positions(thirdAngles)
-                x=2
-#            if time.time()- start_time > 15.0: 
-#                fourthAngles = {'right_w0':0.69,
-#                           'right_w1':-1.530,
-#                           'right_w2':0.691,
-#                           'right_e0':-0.351,
-#                           'right_e1':-0.049,
-#                           'right_s0':0.43,
-#                           'right_s1':-0.634}
-#                limb.set_joint_positions(fourthAngles)
-#                x =2 
-            rate.sleep()
+            if time.time()- start_time > 8 and time.time() - start_time<12: 
+                fourthAngles = {'right_w0': 0.375,
+                                'right_w1': -1.36,
+                                'right_w2': 0.431,
+                                'right_e0': 0.243,
+                                'right_e1': -0.041,
+                                'right_s0': -0.057,
+                                'right_s1': -0.741}
+                limb.set_joint_positions(fourthAngles)
+            if time.time()-start_time > 12 and time.time()- start_time<15:
+                fifthAngles = {'right_w0': -0.662,
+                                'right_w1': 1.02,
+                                'right_w2': 0.499,
+                                'right_e0': 1.184,
+                                'right_e1': 1.927,
+                                'right_s0': 0.0779,
+                                'right_s1': -0.997}
+                limb.set_joint_positions(fifthAngles)
+            if time.time() - start_time > 15: 
+                x =2 
+        rate.sleep()
         mB.openGripper()
 
     def place(self,pose):
@@ -669,25 +695,27 @@ def main(args):
                 block_pose.orientation.y = 0.0
                 block_pose.orientation.z = 0.0
                 block_pose.orientation.w = 1.0
-                pnp.pick(block_pose)
-                item_pose = Pose()
-                if count > 5:
-                    item_pose.position.x = 1.100
-                    item_pose.position.y = -0.4
-                    item_pose.position.z = 0.25
-                    item_pose.orientation.x = 0.098
-                    item_pose.orientation.y = 0.96
-                    item_pose.orientation.z = -0.065
-                    item_pose.orientation.w = 0.27
+                if (pnp.pick(block_pose))==True:
+                    item_pose = Pose()
+                    if count > 5:
+                        item_pose.position.x = 1.100
+                        item_pose.position.y = -0.4
+                        item_pose.position.z = 0.25
+                        item_pose.orientation.x = 0.098
+                        item_pose.orientation.y = 0.96
+                        item_pose.orientation.z = -0.065
+                        item_pose.orientation.w = 0.27
+                    else:
+                        item_pose.position.x = 0.85
+                        item_pose.position.y = -0.44
+                        item_pose.position.z = 0.28
+                        item_pose.orientation.x = 0.0968
+                        item_pose.orientation.y = 0.96
+                        item_pose.orientation.z = -0.06
+                        item_pose.orientation.w = 0.27
+                    pnp.place(item_pose)
                 else:
-                    item_pose.position.x = 0.85
-                    item_pose.position.y = -0.44
-                    item_pose.position.z = 0.28
-                    item_pose.orientation.x = 0.0968
-                    item_pose.orientation.y = 0.96
-                    item_pose.orientation.z = -0.06
-                    item_pose.orientation.w = 0.27
-                pnp.place(item_pose)
+                    PickPlace.startPosition(PickPlace())
                 count+= 1
 
         try:
