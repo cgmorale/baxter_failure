@@ -51,7 +51,7 @@ class TagsPose(object):
         # change the orientation (quaternions) of april tags so that the IK can work
         # need to change it so Baxter knows were to grab the tags from
         self.newPose.pose.position.x -=0.073 #0.069 
-        self.newPose.pose.position.y +=0.061 #0.046
+        self.newPose.pose.position.y +=0.088 #0.061
         self.newPose.pose.position.z = -0.155
         self.newPose.pose.orientation.x = 0
         self.newPose.pose.orientation.y = 1.0
@@ -346,9 +346,12 @@ class PickPlace(object):
             mB.changeBaxterFace('/home/lab/Pictures/sad.jpg')
         self.retract()
         item_pose = Pose()
-        item_pose.position.x = 1.100
-        item_pose.position.y = -0.4
-        item_pose.position.z = 0.25
+#        item_pose.position.x = 1.100
+#        item_pose.position.y = -0.4
+#        item_pose.position.z = 0.25
+        item_pose.position.x = 0.6605
+        item_pose.position.y = -0.4948
+        item_pose.position.z = -0.0726
         item_pose.orientation.x = 0.098
         item_pose.orientation.y = 0.96
         item_pose.orientation.z = -0.065
@@ -356,13 +359,20 @@ class PickPlace(object):
         self.approachBag(item_pose)
         limb=baxter_interface.Limb("right")
         limb.set_joint_position_speed(0.5)
-        endAngles = {'right_w0':-1.117,
-                       'right_w1':-0.224,
-                       'right_w2':1.469,
-                       'right_e0':-0.588,
-                       'right_e1':0.698,
-                       'right_s0':0.324,
-                       'right_s1':-0.574}
+#        endAngles = {'right_w0':-1.117,
+#                       'right_w1':-0.224,
+#                       'right_w2':1.469,
+#                       'right_e0':-0.588,
+#                       'right_e1':0.698,
+#                       'right_s0':0.324,
+#                       'right_s1':-0.574}
+        endAngles = {'right_w0':-1.0427,
+                       'right_w1':0.0717,
+                       'right_w2':0.973,
+                       'right_e0':-0.0913,
+                       'right_e1':0.778,
+                       'right_s0':0.713,
+                       'right_s1':-0.286}
         limb.move_to_joint_positions(endAngles)
         mB.openGripper()
 
@@ -563,7 +573,14 @@ def main(args):
             itemposes, baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
             for key, val in itemposes.items():
                 mB.priceofitems(key)
-                if key == 16:
+                keylist = [1,2,3,4,5,7,8,11,12,13,15,17,18,19,20]
+                if key in keylist:
+                    val = itemposes[key]
+                    itemloc = val.pose
+                    item_loc_x.append(itemloc.position.x)
+                    item_loc_y.append(itemloc.position.y)
+                    item_loc_z.append(itemloc.position.z)
+                elif key == 16:
                     val16 = itemposes[key]
                     throwobj = val16.pose
                     throw_object = Pose()
@@ -657,7 +674,7 @@ def main(args):
                     pnp.crazyMoves(moves_object)
                     rospy.sleep(5.0)
                     PickPlace.startPosition(PickPlace())
-                elif key == 14:
+                else:
                     val14 = itemposes[key]
                     throwobj = val14.pose
                     throw_object = Pose()
@@ -678,13 +695,12 @@ def main(args):
                     item_pose.orientation.z = -0.013
                     item_pose.orientation.w = 0.134
                     pnp.place(item_pose)
-
-                else:
-                    val = itemposes[key]
-                    itemloc = val.pose
-                    item_loc_x.append(itemloc.position.x)
-                    item_loc_y.append(itemloc.position.y)
-                    item_loc_z.append(itemloc.position.z)
+#else
+#                    val = itemposes[key]
+#                    itemloc = val.pose
+#                    item_loc_x.append(itemloc.position.x)
+#                    item_loc_y.append(itemloc.position.y)
+#                    item_loc_z.append(itemloc.position.z)
             mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
             for i in xrange(len(item_loc_x)):
                 block_pose = Pose()
