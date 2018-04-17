@@ -48,11 +48,16 @@ class TagsPose(object):
 
     def transform_pose(self, ids,t):
         self.newPose= t.transformPose('base',ids)
+        diffx = 0.4939 - self.newPose.pose.position.x
+        diffy = 0.1883 - self.newPose.pose.position.y
+        print(diffx)
+        print(diffy)
+        
         # change the orientation (quaternions) of april tags so that the IK can work
         # need to change it so Baxter knows were to grab the tags from
-        self.newPose.pose.position.x +=0.018 
-        self.newPose.pose.position.y +=0.089
-        self.newPose.pose.position.z = -0.155
+        self.newPose.pose.position.x +=0.018 #0.018
+        self.newPose.pose.position.y +=0.089 # 0.089
+        self.newPose.pose.position.z = -0.155 #0.155
         self.newPose.pose.orientation.x = 0
         self.newPose.pose.orientation.y = 1.0
         self.newPose.pose.orientation.z = 0
@@ -148,26 +153,37 @@ class MoveBaxter(object):
 
     def priceofitems(self,key):
         sp = PollySpeech()
-        cerealboxes = [4,5,6,7,8,9]
-        littlecan = [12,13,14,15]
-        bigcan = [10,11]
-        banana = [17]
-        tomato = [18]
-        potato = [16]
-        chips = [19]
-        if key in cerealboxes:
-            sp.speak("Cereal box is one dollar and thirty four cents.")
-        elif key in littlecan:
-            sp.speak("Small can is one dollar and fifty seven cents.")
-        elif key in bigcan:
-            sp.speak("Tomato soup is two dollars ten cents." )
-        elif key in banana:
-            sp.speak("Banana is nineteen cents.")
-        elif key in tomato:
-            sp.speak("Tomato is three dollars.")
-        elif key in potato:
+        if key == 4:
+            sp.speak("Corn pops are one dollar and thirty four cents")
+        elif key == 5:
+            sp.speak("Frosted flakes are one dollar and thirty four cents")
+        elif key == 6:
+            sp.speak("Rice Krispies are one dollar and thirty four cents")
+        elif key == 7:
+            sp.speak("Fruit loops are one dollar and thirty four cents")
+        elif key ==8:
+            sp.speak("Apple Jacks are one dollar and thirty four cents")
+        elif key ==9:
+            sp.speak("Frosted Mini Wheats are one dollar and thirty four cents")
+        elif key ==10:
+            sp.speak("Tomato soup can is two dollars and ten cents")
+        elif key == 11:
+            sp.speak("Alphabet soup is two dollars and ten cents")
+        elif key ==12:
+            sp.speak("Pineapple slices are one dollar and fifty seven cents")
+        elif key == 13:
+            sp.speak("Sliced Peaches are one dollar and fifty seven cents")
+        elif key ==14:
+            sp.speak("Pitted Cherries are one dollar and fifty seven cents")
+        elif key == 15:
+            sp.speak("Corn can is one dollar and fifty seven cents")
+        elif key==16:
             sp.speak("Potato is sixty three cents.")
-        elif key in chips:
+        elif key ==17:
+            sp.speak("Banana is nineteen cents.")
+        elif key ==18:
+            sp.speak("Tomato is three dollars.")
+        elif key ==19:
             sp.speak("Chips are one dollar and ten cents.")
         else:
             sp.speak("Item is one dollar.")
@@ -574,130 +590,149 @@ def main(args):
             item_loc_y = []
             item_loc_z = []
             itemposes, baxjoints =TagsPose.makeDictofTransformedPoses(TagsPose())
-            for key, val in itemposes.items():
-                mB.priceofitems(key)
-                keylist = [1,2,3,4,5,7,8,11,12,13,15,17,18,19,20]
-                if key in keylist:
-                    val = itemposes[key]
-                    itemloc = val.pose
-                    item_loc_x.append(itemloc.position.x)
-                    item_loc_y.append(itemloc.position.y)
-                    item_loc_z.append(itemloc.position.z)
-                elif key == 16:
-                    val16 = itemposes[key]
-                    throwobj = val16.pose
-                    throw_object = Pose()
-                    throw_object.position.x = throwobj.position.x
-                    throw_object.position.y = throwobj.position.y
-                    throw_object.position.z = throwobj.position.z
-                    throw_object.orientation.x = 0.0
-                    throw_object.orientation.y = 0.0
-                    throw_object.orientation.z = 0.0
-                    throw_object.orientation.w = 1.0
-                    pnp.picktothrow(throw_object)
-                    rospy.sleep(5.0)
-                    PickPlace.startPosition(PickPlace())
-                elif key ==10:
-                    val10 = itemposes[key]
-                    misplaceobj = val10.pose
-                    misplace_object = Pose()
-                    misplace_object.position.x = misplaceobj.position.x
-                    misplace_object.position.y = misplaceobj.position.y
-                    misplace_object.position.z = misplaceobj.position.z
-                    misplace_object.orientation.x = 0.0
-                    misplace_object.orientation.y = 0.0
-                    misplace_object.orientation.z = 0.0
-                    misplace_object.orientation.w = 1.0
-                    pnp.picktoMisplace(misplace_object)
-                    rospy.sleep(5.0)
-                    PickPlace.startPosition(PickPlace())
-                elif key ==6:
-                    val6 = itemposes[key]
-                    missobj = val6.pose
-                    miss_object = Pose()
-                    miss_object.position.x = missobj.position.x
-                    miss_object.position.y = missobj.position.y
-                    miss_object.position.z = missobj.position.z + 0.1
-                    miss_object.orientation.x = 0.0
-                    miss_object.orientation.y = 0.0
-                    miss_object.orientation.z = 0.0
-                    miss_object.orientation.w = 1.0
-                    pnp.pick(miss_object)
-                    rospy.sleep(1.0)
-                    othermiss = Pose()
-                    othermiss.position.x = missobj.position.x + 0.02
-                    othermiss.position.y = missobj.position.y
-                    othermiss.position.z = missobj.position.z
-                    othermiss.orientation.x = 0.0
-                    othermiss.orientation.y = 0.0
-                    othermiss.orientation.z = 0.0
-                    othermiss.orientation.w = 1.0
-                    pnp.pickToSqueeze(othermiss)
-                    thirdmiss = Pose()
-                    thirdmiss.position.x = missobj.position.x +0.04
-                    thirdmiss.position.y = missobj.position.y
-                    thirdmiss.position.z = missobj.position.z
-                    thirdmiss.orientation.x = 0.0
-                    thirdmiss.orientation.y = 0.0
-                    thirdmiss.orientation.z = 0.0
-                    thirdmiss.orientation.w = 1.0
-                    pnp.pickToSqueeze(thirdmiss)
-                    fourth = Pose()
-                    fourth.position.x = missobj.position.x
-                    fourth.position.y = missobj.position.y
-                    fourth.position.z = missobj.position.z
-                    fourth.orientation.x = 0.0
-                    fourth.orientation.y = 0.0
-                    fourth.orientation.z = 0.0
-                    fourth.orientation.w = 1.0
-                    pnp.pick(fourth)
-                    mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
-                    itempos = Pose()
-                    itempos.position.x = 0.97
-                    itempos.position.y = -0.52
-                    itempos.position.z = 0.28
-                    itempos.orientation.x = 0.0968
-                    itempos.orientation.y = 0.96
-                    itempos.orientation.z = -0.06
-                    itempos.orientation.w = 0.27
-                    pnp.place(itempos)
-                    rospy.sleep(5.0)
-                    PickPlace.startPosition(PickPlace())
-                elif key == 9:
-                    val17 = itemposes[key]
-                    movesobj = val17.pose
-                    moves_object = Pose()
-                    moves_object.position.x = movesobj.position.x
-                    moves_object.position.y = movesobj.position.y
-                    moves_object.position.z = movesobj.position.z
-                    moves_object.orientation.x = 0.0
-                    moves_object.orientation.y = 0.0
-                    moves_object.orientation.z = 0.0
-                    moves_object.orientation.w = 1.0
-                    pnp.crazyMoves(moves_object)
-                    rospy.sleep(5.0)
-                    PickPlace.startPosition(PickPlace())
+            
+            keylist = [1,2,3,4,5,7,8,11,12,13,15,17,18,19]            
+                       
+            
+            
+            
+            import random
+            keys = itemposes.keys() #LIST OF KEYS THE ROBOT SEES
+            pick = ""             
+            for k in keys:
+                if k in keylist:
+                    pick = k
+                    break
+            #if pick == "":
+             #   pick = keys[random.randint(0,len(itemposes))]
                 else:
-                    val14 = itemposes[key]
-                    throwobj = val14.pose
-                    throw_object = Pose()
-                    throw_object.position.x = throwobj.position.x
-                    throw_object.position.y = throwobj.position.y
-                    throw_object.position.z = throwobj.position.z
-                    throw_object.orientation.x = 0.0
-                    throw_object.orientation.y = 0.0
-                    throw_object.orientation.z = 0.0
-                    throw_object.orientation.w = 1.0
-                    pnp.pick(throw_object)
-                    item_pose = Pose()
-                    item_pose.position.x =0.81
-                    item_pose.position.y = -0.24
-                    item_pose.position.z = 0.203
-                    item_pose.orientation.x = 0.08
-                    item_pose.orientation.y = 0.98
-                    item_pose.orientation.z = -0.013
-                    item_pose.orientation.w = 0.134
-                    pnp.place(item_pose)
+                    pick = k 
+            key = pick
+            val = itemposes[key]
+            
+            mB.priceofitems(key)
+            
+            if key in keylist:
+                val = itemposes[key]
+                itemloc = val.pose
+                item_loc_x.append(itemloc.position.x)
+                item_loc_y.append(itemloc.position.y)
+                item_loc_z.append(itemloc.position.z)
+            elif key == 16:
+                val16 = itemposes[key]
+                throwobj = val16.pose
+                throw_object = Pose()
+                throw_object.position.x = throwobj.position.x
+                throw_object.position.y = throwobj.position.y
+                throw_object.position.z = throwobj.position.z
+                throw_object.orientation.x = 0.0
+                throw_object.orientation.y = 0.0
+                throw_object.orientation.z = 0.0
+                throw_object.orientation.w = 1.0
+                pnp.picktothrow(throw_object)
+                rospy.sleep(5.0)
+                PickPlace.startPosition(PickPlace())
+            elif key ==10:
+                val10 = itemposes[key]
+                misplaceobj = val10.pose
+                misplace_object = Pose()
+                misplace_object.position.x = misplaceobj.position.x
+                misplace_object.position.y = misplaceobj.position.y
+                misplace_object.position.z = misplaceobj.position.z
+                misplace_object.orientation.x = 0.0
+                misplace_object.orientation.y = 0.0
+                misplace_object.orientation.z = 0.0
+                misplace_object.orientation.w = 1.0
+                pnp.picktoMisplace(misplace_object)
+                rospy.sleep(5.0)
+                PickPlace.startPosition(PickPlace())
+            elif key ==6:
+                val6 = itemposes[key]
+                missobj = val6.pose
+                miss_object = Pose()
+                miss_object.position.x = missobj.position.x
+                miss_object.position.y = missobj.position.y
+                miss_object.position.z = missobj.position.z + 0.1
+                miss_object.orientation.x = 0.0
+                miss_object.orientation.y = 0.0
+                miss_object.orientation.z = 0.0
+                miss_object.orientation.w = 1.0
+                pnp.pick(miss_object)
+                rospy.sleep(1.0)
+                othermiss = Pose()
+                othermiss.position.x = missobj.position.x + 0.02
+                othermiss.position.y = missobj.position.y
+                othermiss.position.z = missobj.position.z
+                othermiss.orientation.x = 0.0
+                othermiss.orientation.y = 0.0
+                othermiss.orientation.z = 0.0
+                othermiss.orientation.w = 1.0
+                pnp.pickToSqueeze(othermiss)
+                thirdmiss = Pose()
+                thirdmiss.position.x = missobj.position.x +0.04
+                thirdmiss.position.y = missobj.position.y
+                thirdmiss.position.z = missobj.position.z
+                thirdmiss.orientation.x = 0.0
+                thirdmiss.orientation.y = 0.0
+                thirdmiss.orientation.z = 0.0
+                thirdmiss.orientation.w = 1.0
+                pnp.pickToSqueeze(thirdmiss)
+                fourth = Pose()
+                fourth.position.x = missobj.position.x
+                fourth.position.y = missobj.position.y
+                fourth.position.z = missobj.position.z
+                fourth.orientation.x = 0.0
+                fourth.orientation.y = 0.0
+                fourth.orientation.z = 0.0
+                fourth.orientation.w = 1.0
+                pnp.pick(fourth)
+                mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
+                itempos = Pose()
+                itempos.position.x = 0.97
+                itempos.position.y = -0.52
+                itempos.position.z = 0.28
+                itempos.orientation.x = 0.0968
+                itempos.orientation.y = 0.96
+                itempos.orientation.z = -0.06
+                itempos.orientation.w = 0.27
+                pnp.place(itempos)
+                rospy.sleep(5.0)
+                PickPlace.startPosition(PickPlace())
+            elif key == 9:
+                val17 = itemposes[key]
+                movesobj = val17.pose
+                moves_object = Pose()
+                moves_object.position.x = movesobj.position.x
+                moves_object.position.y = movesobj.position.y
+                moves_object.position.z = movesobj.position.z
+                moves_object.orientation.x = 0.0
+                moves_object.orientation.y = 0.0
+                moves_object.orientation.z = 0.0
+                moves_object.orientation.w = 1.0
+                pnp.crazyMoves(moves_object)
+                rospy.sleep(5.0)
+                PickPlace.startPosition(PickPlace())
+            else:
+                val14 = itemposes[key]
+                throwobj = val14.pose
+                throw_object = Pose()
+                throw_object.position.x = throwobj.position.x
+                throw_object.position.y = throwobj.position.y
+                throw_object.position.z = throwobj.position.z
+                throw_object.orientation.x = 0.0
+                throw_object.orientation.y = 0.0
+                throw_object.orientation.z = 0.0
+                throw_object.orientation.w = 1.0
+                pnp.pick(throw_object)
+                item_pose = Pose()
+                item_pose.position.x =0.81
+                item_pose.position.y = -0.24
+                item_pose.position.z = 0.203
+                item_pose.orientation.x = 0.08
+                item_pose.orientation.y = 0.98
+                item_pose.orientation.z = -0.013
+                item_pose.orientation.w = 0.134
+                pnp.place(item_pose)
 #else
 #                    val = itemposes[key]
 #                    itemloc = val.pose
