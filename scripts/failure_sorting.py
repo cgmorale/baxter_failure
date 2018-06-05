@@ -48,15 +48,14 @@ class TagsPose(object):
 
     def transform_pose(self, ids,t):
         self.newPose= t.transformPose('base',ids)
-        diffx = 0.4939 - self.newPose.pose.position.x
-        diffy = 0.1883 - self.newPose.pose.position.y
-        print(diffx)
-        print(diffy)
-        
+        diffx = 0.5219 - self.newPose.pose.position.x
+        diffy = -0.0503- self.newPose.pose.position.y
+        print (diffx)
+        print (diffy)
         # change the orientation (quaternions) of april tags so that the IK can work
         # need to change it so Baxter knows were to grab the tags from
-        self.newPose.pose.position.x +=0.018 #0.018
-        self.newPose.pose.position.y +=0.089 # 0.089
+        self.newPose.pose.position.x +=-0.030 #0.0194
+        self.newPose.pose.position.y +=0.072 # 0.095
         self.newPose.pose.position.z = -0.155 #0.155
         self.newPose.pose.orientation.x = 0
         self.newPose.pose.orientation.y = 1.0
@@ -306,8 +305,10 @@ class PickPlace(object):
         rospy.sleep(2.0)
         if self.gripper.position()<5.0:
             mB.changeBaxterFace('/home/lab/Pictures/surprised.jpg')
+            #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
             self.retract()
             mB.changeBaxterFace('/home/lab/Pictures/sad.jpg')
+            #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
             pickObject= False
         self.retract()
         return pickObject
@@ -326,8 +327,10 @@ class PickPlace(object):
         rospy.sleep(2.0)
         if self.gripper.position()<5.0:
             mB.changeBaxterFace('/home/lab/Pictures/surprised.jpg')
+            #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
             self.retract()
             mB.changeBaxterFace('/home/lab/Pictures/sad.jpg')
+            #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
             pickObject= False
         self.retract()
         return pickObject
@@ -346,6 +349,7 @@ class PickPlace(object):
         if self.gripper.position()>5.0:
             self.retract()
             mB.changeBaxterFace('/home/lab/Pictures/angryred.jpg')
+            #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
             self.openGripperToThrow()
 
     def picktoMisplace(self, pose):
@@ -361,13 +365,12 @@ class PickPlace(object):
         rospy.sleep(2.0)
         if self.gripper.position()<5.0:
             mB.changeBaxterFace('/home/lab/Pictures/surprised.jpg')
+            #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
             self.retract()
             mB.changeBaxterFace('/home/lab/Pictures/sad.jpg')
+            #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
         self.retract()
         item_pose = Pose()
-#        item_pose.position.x = 1.100
-#        item_pose.position.y = -0.4
-#        item_pose.position.z = 0.25
         item_pose.position.x = 0.6605
         item_pose.position.y = -0.4948
         item_pose.position.z = -0.0726
@@ -377,14 +380,8 @@ class PickPlace(object):
         item_pose.orientation.w = 0.27
         self.approachBag(item_pose)
         limb=baxter_interface.Limb("right")
-        limb.set_joint_position_speed(0.5)
-#        endAngles = {'right_w0':-1.117,
-#                       'right_w1':-0.224,
-#                       'right_w2':1.469,
-#                       'right_e0':-0.588,
-#                       'right_e1':0.698,
-#                       'right_s0':0.324,
-#                       'right_s1':-0.574}
+        limb.set_joint_position_speed(1.0)
+
         endAngles = {'right_w0':-1.0427,
                        'right_w1':0.0717,
                        'right_w2':0.973,
@@ -399,14 +396,6 @@ class PickPlace(object):
         limb=baxter_interface.Limb("right")
         limb.set_joint_position_speed(1.0)
         limb.set_joint_velocities(dict({ 'right_w1':3.0,'right_e1':2.0}))
-#        endAngles = {'right_w0':-0.52,
-#                       'right_w1':-1.3,
-#                       'right_w2':0.50,
-#                       'right_e0':0.436,
-#                       'right_e1':0.67,
-#                       'right_s0':0.708,
-#                       'right_s1':-0.622}
-#        limb.move_to_joint_positions(endAngles)
         x= 1
         rate = rospy.Rate(1000)
         start_time = time.time()
@@ -447,6 +436,7 @@ class PickPlace(object):
         if self.gripper.position()>5.0:
             self.retract()
             mB.changeBaxterFace('/home/lab/Pictures/angryred.jpg')
+            #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
         self.approachBag(pose)
         rospy.sleep(0.5)
         x = 1
@@ -522,6 +512,7 @@ def main(args):
     rightl = baxter_interface.Limb('right')
     rightl.set_joint_position_speed(1.0)
     mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
+    #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
     sp = PollySpeech()
     sp.speak("Hello, how are you doing today? Did you find everything you were looking for?",block=False)
     mB.calibrateGripper()
@@ -532,6 +523,7 @@ def main(args):
         count = 0
         while x ==1:
             mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
+            #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
             pnp = PickPlace()
             item_loc_x = []
             item_loc_y = []
@@ -585,6 +577,7 @@ def main(args):
         count = 0
         while x ==1:
             mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
+            #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
             pnp = PickPlace()
             item_loc_x = []
             item_loc_y = []
@@ -687,6 +680,7 @@ def main(args):
                 fourth.orientation.w = 1.0
                 pnp.pick(fourth)
                 mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
+                #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
                 itempos = Pose()
                 itempos.position.x = 0.97
                 itempos.position.y = -0.52
@@ -733,13 +727,9 @@ def main(args):
                 item_pose.orientation.z = -0.013
                 item_pose.orientation.w = 0.134
                 pnp.place(item_pose)
-#else
-#                    val = itemposes[key]
-#                    itemloc = val.pose
-#                    item_loc_x.append(itemloc.position.x)
-#                    item_loc_y.append(itemloc.position.y)
-#                    item_loc_z.append(itemloc.position.z)
+
             mB.changeBaxterFace('/home/lab/Pictures/baxterhappy.jpg')
+            #mB.changeBaxterFace('/home/lab/Pictures/blackscreen.jpg')
             for i in xrange(len(item_loc_x)):
                 block_pose = Pose()
                 block_pose.position.x = item_loc_x[i]
@@ -751,22 +741,13 @@ def main(args):
                 block_pose.orientation.w = 1.0
                 if (pnp.pick(block_pose))==True:
                     item_pose = Pose()
-                    if count > 5:
-                        item_pose.position.x = 1.100
-                        item_pose.position.y = -0.4
-                        item_pose.position.z = 0.25
-                        item_pose.orientation.x = 0.098
-                        item_pose.orientation.y = 0.96
-                        item_pose.orientation.z = -0.065
-                        item_pose.orientation.w = 0.27
-                    else:
-                        item_pose.position.x = 0.97 #0.85
-                        item_pose.position.y = -0.52 # -0.44
-                        item_pose.position.z = 0.28 # 0.28
-                        item_pose.orientation.x = 0.0968 
-                        item_pose.orientation.y = 0.96
-                        item_pose.orientation.z = -0.06
-                        item_pose.orientation.w = 0.27
+                    item_pose.position.x = 1.02 
+                    item_pose.position.y = -0.52 
+                    item_pose.position.z = 0.28 
+                    item_pose.orientation.x = 0.08 
+                    item_pose.orientation.y = 0.93 
+                    item_pose.orientation.z = -0.04 
+                    item_pose.orientation.w = 0.344 
                     pnp.place(item_pose)
                 else:
                     PickPlace.startPosition(PickPlace())
